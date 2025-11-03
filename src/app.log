@@ -1,0 +1,10 @@
+2025-08-27 23:24:01,197 - api - ERROR - Error no manejado: Invalid salt
+2025-08-27 23:24:02,148 - api - ERROR - Error no manejado: Invalid salt
+2025-08-27 23:24:52,166 - api - ERROR - Error no manejado: Invalid salt
+2025-08-27 23:24:52,860 - api - ERROR - Error no manejado: Invalid salt
+2025-08-27 23:33:36,525 - api - ERROR - Error al crear venta: 500: Stock insuficiente para el producto 1
+2025-08-27 23:34:19,525 - api - ERROR - Error al crear venta: 500: Stock insuficiente para el producto 1
+2025-08-27 23:35:42,943 - api - ERROR - Error al crear venta: 500: Stock insuficiente para el producto 2
+2025-08-28 01:12:19,790 - api - ERROR - Error no manejado: 'str' object has no attribute 'credentials'
+2025-08-28 01:12:20,903 - api - ERROR - Error no manejado: 'str' object has no attribute 'credentials'
+2025-08-28 01:15:57,299 - api - ERROR - Error al crear venta: 500: Stock insuficiente para el producto 2
