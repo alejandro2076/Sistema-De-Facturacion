@@ -3,8 +3,7 @@ from ttkbootstrap.constants import *
 import tkinter as tk
 from tkinter import messagebox, scrolledtext
 from sqlalchemy import create_engine, Column, Integer, String, Float
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import declarative_base, sessionmaker
 import sqlite3
 from datetime import datetime, timedelta
 import random
@@ -31,10 +30,17 @@ def manejar_errores(func):
     return wrapper
 
 # Configuración básica de SQLAlchemy
-DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///electrostore.db")
+# Preferir la variable ELECTROSTORE_DB para pruebas (ruta a archivo sqlite),
+# si no está, usar DATABASE_URL o el valor por defecto.
+db_file = os.environ.get("ELECTROSTORE_DB")
+if db_file:
+    DATABASE_URL = f"sqlite:///{db_file}"
+else:
+    DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///electrostore.db")
+
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False} if "sqlite" in DATABASE_URL else {})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base = declarative_base()
+Base = declarative_base()  # Corregido para SQLAlchemy 2.0
 
 # Modelo de datos para Producto
 class ProductoModel(Base):
@@ -101,6 +107,8 @@ class SecuenciaFacturaModel(Base):
     siguiente_numero = Column(Integer, nullable=False, default=1)
     tipo = Column(String, nullable=False)  # 'factura', 'nota_credito', etc.
 
+# Crear tablas en la base de datos si no existen (útil para tests y entornos nuevos)
+Base.metadata.create_all(bind=engine)
 # Simulación de servicios externos
 class Microservicio(ABC):
     @abstractmethod
@@ -190,11 +198,18 @@ class KafkaSimulator:
 class SistemaElectrodomesticos:
     def __init__(self, root):
         self.root = root
-        self.root.title("Sistema de Gestión - ElectroStore (Microservicios)")
+        self.root.title("ElectroStore - Sistema de Gestión")
         self.root.geometry("1400x900")
-        
-        # Aplicar tema moderno de ttkbootstrap
+        # use a dark ttkbootstrap theme for a dark UI
+        # possible dark themes: 'darkly', 'cyborg' (ttkbootstrap built-ins)
         self.style = ttk.Style(theme="darkly")
+
+        # Variables de estado usadas globalmente (inicializadas temprano para evitar errores
+        # cuando se llaman métodos que las referencian antes de que los widgets específicos
+        # de la vista de caja se creen).
+        self.estado_caja_var = tk.StringVar(value="Estado: CERRADA")
+        self.monto_inicial_var = tk.StringVar(value="Monto inicial: $0.00")
+        self.ventas_hoy_var = tk.StringVar(value="Ventas hoy: $0.00")
         
         # Estado de la caja (cerrada por defecto)
         self.caja_abierta = False
@@ -219,8 +234,8 @@ class SistemaElectrodomesticos:
         self.kafka.suscribir('contabilidad', self.contabilidad_service)
         self.kafka.suscribir('autorizaciones', self.autorizaciones_service)
         
-        # Crear la interfaz
-        self.create_widgets()
+        # Crear la nueva interfaz con el diseño de la imagen
+        self.create_new_interface()
         
         # Cargar productos
         self.load_products()
@@ -231,6 +246,210 @@ class SistemaElectrodomesticos:
         # Iniciar monitoreo de alertas
         self.monitorear_alertas()
         
+        # Mostrar pantalla inicial por defecto (sin dashboard)
+        self.mostrar_home()
+        
+    def create_new_interface(self):
+        # Crear contenedor principal
+        self.main_container = ttk.Frame(self.root)
+        self.main_container.pack(fill=tk.BOTH, expand=True)
+        
+        # HEADER SUPERIOR
+        self.create_header()
+        
+        # CONTENEDOR PRINCIPAL (Sidebar + Content)
+        self.content_container = ttk.Frame(self.main_container)
+        self.content_container.pack(fill=tk.BOTH, expand=True)
+        # Main container (fills root). We'll use grid inside content_container
+        # header on top
+        self.create_header()
+
+        # content container holds sidebar and main content using grid so layout
+        # can be responsive (column weight configuration)
+        try:
+            self.content_container.columnconfigure(0, weight=0, minsize=200)
+            self.content_container.columnconfigure(1, weight=1)
+            self.content_container.rowconfigure(0, weight=1)
+        except Exception:
+            # Algunos backends no usan grid; esta configuración es segura si existe
+            pass
+
+        # Estado para controlar la visibilidad del sidebar
+        self.sidebar_visible = True
+
+        # SIDEBAR IZQUIERDO
+        self.create_sidebar()
+
+        # CONTENIDO PRINCIPAL
+        self.create_main_content()
+
+        # Inicializar carrito
+        self.carrito = []
+        
+    def create_header(self):
+        header_frame = ttk.Frame(self.main_container, bootstyle="dark")
+        header_frame.pack(fill=tk.X, padx=10, pady=5)
+
+        # Logo y departamento
+        left_header = ttk.Frame(header_frame)
+        left_header.pack(side=tk.LEFT)
+
+        # Cabecera más acorde al sistema de facturación
+        ttk.Label(left_header, text="🏢 ElectroStore - Sistema de Facturación", 
+                 font=("Arial", 12, "bold"), bootstyle="primary").pack(side=tk.LEFT)
+
+        # Usuario a la derecha
+        right_header = ttk.Frame(header_frame)
+        right_header.pack(side=tk.RIGHT)
+
+        # Botón para toggle del sidebar (útil en pantallas pequeñas)
+        toggle_btn = ttk.Button(right_header, text="☰", command=self.toggle_sidebar, bootstyle="secondary")
+        toggle_btn.pack(side=tk.RIGHT, padx=(0, 8))
+
+        ttk.Label(right_header, text="👤 Admin", 
+                 font=("Arial", 10), bootstyle="secondary").pack(side=tk.RIGHT)
+        
+    def create_sidebar(self):
+        # Hacemos que el sidebar sea accesible como atributo para poder mostrar/ocultar
+        self.sidebar_frame = ttk.Frame(self.content_container, width=250, bootstyle="secondary")
+        # Usamos grid dentro de content_container para permitir comportamiento responsive
+        try:
+            self.sidebar_frame.grid(row=0, column=0, sticky=(tk.N, tk.S, tk.W), padx=(0, 5))
+            self.sidebar_frame.grid_propagate(False)
+        except Exception:
+            # Si por alguna razón grid no está disponible, fallback a pack
+            self.sidebar_frame.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 5))
+            self.sidebar_frame.pack_propagate(False)
+
+        # Información compacta de la tienda (se eliminó el bloque "Espacios de Trabajo")
+        shop_frame = ttk.Frame(self.sidebar_frame, padding=8)
+        shop_frame.pack(fill=tk.X, padx=5, pady=6)
+        ttk.Label(shop_frame, text="ElectroStore", font=("Arial", 11, "bold"), bootstyle="primary").pack(anchor=tk.W)
+        ttk.Label(shop_frame, text="Sistema de Facturación", font=("Arial", 9), bootstyle="secondary").pack(anchor=tk.W)
+        ttk.Separator(self.sidebar_frame, orient=tk.HORIZONTAL).pack(fill=tk.X, padx=5, pady=8)
+
+        # Navegación
+        nav_frame = ttk.Frame(self.sidebar_frame)
+        nav_frame.pack(fill=tk.X, padx=5)
+
+        # Botones de navegación con íconos (se eliminaron Dashboard y Vista Kanban)
+        nav_buttons = [
+            ("📅 Calendario", self.mostrar_calendario),
+            ("💰 Punto de Venta", self.mostrar_ventas),
+            ("📦 Inventario", self.mostrar_inventario),
+            ("💵 Control de Caja", self.mostrar_caja),
+            ("🔄 Devoluciones", self.mostrar_devoluciones),
+            ("📈 Reportes", self.mostrar_reportes),
+            ("⚙️ Microservicios", self.mostrar_microservicios)
+        ]
+
+        for text, command in nav_buttons:
+            btn = ttk.Button(nav_frame, text=text, command=command,
+                              bootstyle="primary", width=20)
+            btn.pack(fill=tk.X, pady=6)
+            
+    def create_main_content(self):
+        self.main_content = ttk.Frame(self.content_container)
+        try:
+            # Ubicar main_content en la columna 1 (la columna 0 es el sidebar)
+            self.main_content.grid(row=0, column=1, sticky=(tk.N, tk.E, tk.S, tk.W))
+        except Exception:
+            # Fallback a pack si grid no funciona
+            self.main_content.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        # Frame para el contenido dinámico
+        self.content_frame = ttk.Frame(self.main_content)
+        self.content_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+    def toggle_sidebar(self):
+        """Mostrar/ocultar la barra lateral. Útil para pantallas pequeñas."""
+        try:
+            if getattr(self, 'sidebar_visible', True):
+                # ocultar
+                self.sidebar_frame.grid_remove()
+                self.sidebar_visible = False
+            else:
+                # mostrar (asegurarse de reubicarla)
+                self.sidebar_frame.grid(row=0, column=0, sticky=(tk.N, tk.S, tk.W), padx=(0, 5))
+                self.sidebar_visible = True
+        except Exception:
+            # fallback: pack/unpack
+            try:
+                if self.sidebar_visible:
+                    self.sidebar_frame.pack_forget()
+                    self.sidebar_visible = False
+                else:
+                    self.sidebar_frame.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 5))
+                    self.sidebar_visible = True
+            except Exception:
+                # Si falla, no hacemos nada
+                pass
+        
+    def mostrar_dashboard(self):
+        # Mantener por compatibilidad: mostrar home simple
+        self.mostrar_home()
+
+    def mostrar_home(self):
+        """Pantalla inicial simple para el sistema de facturación."""
+        self.limpiar_contenido()
+        title_frame = ttk.Frame(self.content_frame)
+        title_frame.pack(fill=tk.X, pady=(10, 20))
+        ttk.Label(title_frame, text="Sistema de Facturación - ElectroStore", 
+                 font=("Arial", 18, "bold"), bootstyle="primary").pack(side=tk.LEFT)
+
+        subtitle = ttk.Frame(self.content_frame)
+        subtitle.pack(fill=tk.X)
+        ttk.Label(subtitle, text="Bienvenido. Use el menú izquierdo para navegar: Punto de Venta, Inventario, Caja, Devoluciones, Reportes y Microservicios.",
+                 font=("Arial", 11), bootstyle="secondary", wraplength=900, justify=tk.LEFT).pack(anchor=tk.W, pady=(0,10))
+        # Espacio para KPIs resumidos
+        kpi_frame = ttk.Labelframe(self.content_frame, text="Resumen rápido", padding=10, bootstyle="primary")
+        kpi_frame.pack(fill=tk.BOTH, expand=True)
+        ttk.Label(kpi_frame, text="Ventas hoy:", bootstyle="primary").grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
+        ttk.Label(kpi_frame, textvariable=self.ventas_hoy_var, bootstyle="primary").grid(row=0, column=1, sticky=tk.W, padx=5, pady=5)
+        ttk.Label(kpi_frame, text="Estado de caja:", bootstyle="primary").grid(row=1, column=0, sticky=tk.W, padx=5, pady=5)
+        ttk.Label(kpi_frame, textvariable=self.estado_caja_var, bootstyle="primary").grid(row=1, column=1, sticky=tk.W, padx=5, pady=5)
+        
+    def mostrar_kanban(self):
+        # Kanban eliminado por decisión del producto; mostrar mensaje alternativo
+        self.limpiar_contenido()
+        ttk.Label(self.content_frame, text="Funcionalidad de Kanban removida.", 
+                 font=("Arial", 14), bootstyle="secondary").pack(pady=50)
+        
+    def mostrar_calendario(self):
+        self.limpiar_contenido()
+        ttk.Label(self.content_frame, text="Calendario - Próximamente", 
+                 font=("Arial", 16)).pack(pady=50)
+        
+    def mostrar_ventas(self):
+        self.limpiar_contenido()
+        self.create_ventas_widgets()
+        
+    def mostrar_inventario(self):
+        self.limpiar_contenido()
+        self.create_inventario_widgets()
+        
+    def mostrar_caja(self):
+        self.limpiar_contenido()
+        self.create_caja_widgets()
+        
+    def mostrar_devoluciones(self):
+        self.limpiar_contenido()
+        self.create_devoluciones_widgets()
+        
+    def mostrar_reportes(self):
+        self.limpiar_contenido()
+        self.create_reportes_widgets()
+        
+    def mostrar_microservicios(self):
+        self.limpiar_contenido()
+        self.create_microservicios_widgets()
+        
+    def limpiar_contenido(self):
+        for widget in self.content_frame.winfo_children():
+            widget.destroy()
+
+    # AQUÍ COMIENZAN TODOS LOS MÉTODOS ORIGINALES (se mantienen exactamente igual)
+    
     def create_tables(self):
         cursor = self.conn.cursor()
         
@@ -402,61 +621,28 @@ class SistemaElectrodomesticos:
             
             self.conn.commit()
     
-    def create_widgets(self):
-        # Frame principal con pestañas
-        self.notebook = ttk.Notebook(self.root, bootstyle="primary")
-        self.notebook.pack(fill='both', expand=True, padx=10, pady=10)
-        
-        # Pestaña de Ventas
-        self.ventas_frame = ttk.Frame(self.notebook, padding="10")
-        self.notebook.add(self.ventas_frame, text="Punto de Venta")
-        
-        # Pestaña de Inventario
-        self.inventario_frame = ttk.Frame(self.notebook, padding="10")
-        self.notebook.add(self.inventario_frame, text="Gestión de Inventario")
-        
-        # Pestaña de Caja
-        self.caja_frame = ttk.Frame(self.notebook, padding="10")
-        self.notebook.add(self.caja_frame, text="Control de Caja")
-        
-        # Pestaña de Devoluciones
-        self.devoluciones_frame = ttk.Frame(self.notebook, padding="10")
-        self.notebook.add(self.devoluciones_frame, text="Devoluciones")
-        
-        # Pestaña de Reportes
-        self.reportes_frame = ttk.Frame(self.notebook, padding="10")
-        self.notebook.add(self.reportes_frame, text="Reportes y Dashboard")
-        
-        # Pestaña de Monitor de Microservicios
-        self.microservicios_frame = ttk.Frame(self.notebook, padding="10")
-        self.notebook.add(self.microservicios_frame, text="Monitor de Microservicios")
-        
-        # Crear widgets para cada pestaña
-        self.create_ventas_widgets()
-        self.create_inventario_widgets()
-        self.create_caja_widgets()
-        self.create_devoluciones_widgets()
-        self.create_reportes_widgets()
-        self.create_microservicios_widgets()
-        
-        # Inicializar carrito
-        self.carrito = []
-    
     def create_ventas_widgets(self):
         # Título
-        title_label = ttk.Label(self.ventas_frame, text="Punto de Venta - ElectroStore", 
+        title_label = ttk.Label(self.content_frame, text="Punto de Venta - ElectroStore", 
                                font=("Arial", 16, "bold"), bootstyle="inverse-primary")
         title_label.grid(row=0, column=0, columnspan=2, pady=(0, 20), sticky="ew")
         
-        # Panel de búsqueda/escaneo
-        search_frame = ttk.Labelframe(self.ventas_frame, text="Escaneo de Productos", 
+        # Panel de búsqueda/escaneo (responsive)
+        search_frame = ttk.Labelframe(self.content_frame, text="Escaneo de Productos", 
                                      padding="10", bootstyle="info")
-        search_frame.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N), padx=(0, 10))
+        search_frame.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), padx=(0, 10))
+        # permitir que la columna central (inputs) se expanda cuando la ventana cambia de tamaño
+        try:
+            search_frame.columnconfigure(0, weight=0)
+            search_frame.columnconfigure(1, weight=1)
+            search_frame.columnconfigure(2, weight=0)
+        except Exception:
+            pass
         
         ttk.Label(search_frame, text="Código de Barras:", bootstyle="info").grid(row=0, column=0, sticky=tk.W, pady=5)
         self.codigo_barras_var = tk.StringVar()
-        codigo_entry = ttk.Entry(search_frame, textvariable=self.codigo_barras_var, 
-                                width=20, bootstyle="info")
+        codigo_entry = ttk.Entry(search_frame, textvariable=self.codigo_barras_var,
+                                 bootstyle="info")
         codigo_entry.grid(row=0, column=1, sticky=(tk.W, tk.E), pady=5, padx=(5, 0))
         codigo_entry.bind('<Return>', self.buscar_por_codigo)
         
@@ -465,8 +651,8 @@ class SistemaElectrodomesticos:
         
         ttk.Label(search_frame, text="O buscar por nombre:", bootstyle="info").grid(row=1, column=0, sticky=tk.W, pady=5)
         self.nombre_busqueda_var = tk.StringVar()
-        nombre_search = ttk.Entry(search_frame, textvariable=self.nombre_busqueda_var, 
-                                 width=20, bootstyle="info")
+        nombre_search = ttk.Entry(search_frame, textvariable=self.nombre_busqueda_var,
+                                   bootstyle="info")
         nombre_search.grid(row=1, column=1, sticky=(tk.W, tk.E), pady=5, padx=(5, 0))
         nombre_search.bind('<Return>', self.buscar_por_nombre)
         
@@ -495,9 +681,10 @@ class SistemaElectrodomesticos:
                     state="readonly", width=15, bootstyle="info").grid(row=4, column=1, sticky=tk.W, pady=5, padx=(5, 0))
         
         # Carrito de compras
-        cart_frame = ttk.Labelframe(self.ventas_frame, text="Carrito de Compra", 
+        cart_frame = ttk.Labelframe(self.content_frame, text="Carrito de Compra",
                                    padding="10", bootstyle="primary")
         cart_frame.grid(row=1, column=1, sticky=(tk.N, tk.S, tk.E, tk.W), pady=(0, 10))
+        # make cart expand to fill available space
         cart_frame.columnconfigure(0, weight=1)
         cart_frame.rowconfigure(0, weight=1)
         
@@ -537,21 +724,26 @@ class SistemaElectrodomesticos:
         # Producto actual para venta
         self.current_product = None
         
-        # Configurar grid
-        self.ventas_frame.columnconfigure(1, weight=1)
-        self.ventas_frame.rowconfigure(1, weight=1)
+        # Configurar grid para que el panel de búsqueda y el carrito respondan
+        try:
+            # Columna 0 (búsqueda) y columna 1 (carrito) deben repartirse el espacio
+            self.content_frame.columnconfigure(0, weight=1)
+            self.content_frame.columnconfigure(1, weight=2)
+            self.content_frame.rowconfigure(1, weight=1)
+        except Exception:
+            pass
         cart_frame.columnconfigure(0, weight=1)
         cart_frame.rowconfigure(0, weight=1)
     
     def create_inventario_widgets(self):
         # Título
-        title_label = ttk.Label(self.inventario_frame, text="Gestión de Inventario", 
+        title_label = ttk.Label(self.content_frame, text="Gestión de Inventario", 
                                font=("Arial", 16, "bold"), bootstyle="inverse-primary")
         title_label.grid(row=0, column=0, columnspan=3, pady=(0, 20), sticky="ew")
         
         # Treeview para productos
         columns = ("id", "codigo", "nombre", "precio", "stock", "categoria", "numero_serie")
-        self.inv_tree = ttk.Treeview(self.inventario_frame, columns=columns, show="headings", 
+        self.inv_tree = ttk.Treeview(self.content_frame, columns=columns, show="headings", 
                                     height=15, bootstyle="info")
         
         self.inv_tree.heading("id", text="ID")
@@ -570,7 +762,7 @@ class SistemaElectrodomesticos:
         self.inv_tree.column("categoria", width=150)
         self.inv_tree.column("numero_serie", width=150)
         
-        scrollbar = ttk.Scrollbar(self.inventario_frame, orient=tk.VERTICAL, 
+        scrollbar = ttk.Scrollbar(self.content_frame, orient=tk.VERTICAL, 
                                  command=self.inv_tree.yview, bootstyle="primary-round")
         self.inv_tree.configure(yscrollcommand=scrollbar.set)
         
@@ -578,7 +770,7 @@ class SistemaElectrodomesticos:
         scrollbar.grid(row=1, column=2, sticky=(tk.N, tk.S))
         
         # Botones de gestión
-        btn_frame = ttk.Frame(self.inventario_frame)
+        btn_frame = ttk.Frame(self.content_frame)
         btn_frame.grid(row=2, column=0, columnspan=3, pady=(10, 0))
         
         ttk.Button(btn_frame, text="Agregar Producto", command=self.agregar_producto, 
@@ -591,7 +783,7 @@ class SistemaElectrodomesticos:
                   bootstyle="secondary").pack(side=tk.LEFT, padx=5)
         
         # Panel de alertas de inventario
-        alertas_frame = ttk.Labelframe(self.inventario_frame, text="Alertas de Stock Bajo", 
+        alertas_frame = ttk.Labelframe(self.content_frame, text="Alertas de Stock Bajo", 
                                       padding="10", bootstyle="warning")
         alertas_frame.grid(row=3, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(10, 0))
         
@@ -600,17 +792,17 @@ class SistemaElectrodomesticos:
         self.alertas_text.config(state=tk.DISABLED)
         
         # Configurar grid
-        self.inventario_frame.columnconfigure(0, weight=1)
-        self.inventario_frame.rowconfigure(1, weight=1)
+        self.content_frame.columnconfigure(0, weight=1)
+        self.content_frame.rowconfigure(1, weight=1)
     
     def create_caja_widgets(self):
         # Título
-        title_label = ttk.Label(self.caja_frame, text="Control de Caja", 
+        title_label = ttk.Label(self.content_frame, text="Control de Caja", 
                                font=("Arial", 16, "bold"), bootstyle="inverse-primary")
         title_label.grid(row=0, column=0, columnspan=2, pady=(0, 20), sticky="ew")
         
         # Estado de caja
-        estado_frame = ttk.Labelframe(self.caja_frame, text="Estado de Caja", 
+        estado_frame = ttk.Labelframe(self.content_frame, text="Estado de Caja", 
                                      padding="10", bootstyle="info")
         estado_frame.grid(row=1, column=0, sticky=(tk.W, tk.E), padx=(0, 10))
         
@@ -625,7 +817,7 @@ class SistemaElectrodomesticos:
         ttk.Label(estado_frame, textvariable=self.ventas_hoy_var, bootstyle="info").grid(row=2, column=0, sticky=tk.W, pady=2)
         
         # Controles de caja
-        controles_frame = ttk.Labelframe(self.caja_frame, text="Controles de Caja", 
+        controles_frame = ttk.Labelframe(self.content_frame, text="Controles de Caja", 
                                         padding="10", bootstyle="primary")
         controles_frame.grid(row=2, column=0, sticky=(tk.W, tk.E), padx=(0, 10), pady=(10, 0))
         
@@ -640,7 +832,7 @@ class SistemaElectrodomesticos:
                   bootstyle="danger").grid(row=0, column=3, padx=(10, 0))
         
         # Reporte de ventas del día
-        ventas_frame = ttk.Labelframe(self.caja_frame, text="Ventas de Hoy", 
+        ventas_frame = ttk.Labelframe(self.content_frame, text="Ventas de Hoy", 
                                      padding="10", bootstyle="secondary")
         ventas_frame.grid(row=1, column=1, rowspan=2, sticky=(tk.N, tk.E, tk.S, tk.W))
         ventas_frame.columnconfigure(0, weight=1)
@@ -669,19 +861,19 @@ class SistemaElectrodomesticos:
         ventas_scrollbar.grid(row=0, column=1, sticky=(tk.N, tk.S))
         
         # Configurar grid
-        self.caja_frame.columnconfigure(1, weight=1)
-        self.caja_frame.rowconfigure(1, weight=1)
+        self.content_frame.columnconfigure(1, weight=1)
+        self.content_frame.rowconfigure(1, weight=1)
         ventas_frame.columnconfigure(0, weight=1)
         ventas_frame.rowconfigure(0, weight=1)
     
     def create_devoluciones_widgets(self):
         # Título
-        title_label = ttk.Label(self.devoluciones_frame, text="Gestión de Devoluciones", 
+        title_label = ttk.Label(self.content_frame, text="Gestión de Devoluciones", 
                                font=("Arial", 16, "bold"), bootstyle="inverse-primary")
         title_label.grid(row=0, column=0, columnspan=2, pady=(0, 20), sticky="ew")
         
         # Panel de búsqueda de venta
-        search_frame = ttk.Labelframe(self.devoluciones_frame, text="Buscar Venta para Devolución", 
+        search_frame = ttk.Labelframe(self.content_frame, text="Buscar Venta para Devolución", 
                                      padding="10", bootstyle="info")
         search_frame.grid(row=1, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
         
@@ -704,7 +896,7 @@ class SistemaElectrodomesticos:
         ttk.Label(search_frame, textvariable=self.devolucion_venta_info_var, bootstyle="info").grid(row=2, column=0, columnspan=3, sticky=tk.W, pady=5)
         
         # Productos de la venta
-        products_frame = ttk.Labelframe(self.devoluciones_frame, text="Productos de la Venta", 
+        products_frame = ttk.Labelframe(self.content_frame, text="Productos de la Venta", 
                                        padding="10", bootstyle="primary")
         products_frame.grid(row=2, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 10))
         products_frame.columnconfigure(0, weight=1)
@@ -732,7 +924,7 @@ class SistemaElectrodomesticos:
         scrollbar.grid(row=0, column=1, sticky=(tk.N, tk.S))
         
         # Frame para devolución
-        dev_frame = ttk.Labelframe(self.devoluciones_frame, text="Procesar Devolución", 
+        dev_frame = ttk.Labelframe(self.content_frame, text="Procesar Devolución", 
                                   padding="10", bootstyle="warning")
         dev_frame.grid(row=3, column=0, sticky=(tk.W, tk.E), pady=(0, 10))
         
@@ -761,8 +953,8 @@ class SistemaElectrodomesticos:
                   bootstyle="warning").grid(row=4, column=0, columnspan=2, pady=10)
         
         # Configurar grid
-        self.devoluciones_frame.columnconfigure(0, weight=1)
-        self.devoluciones_frame.rowconfigure(2, weight=1)
+        self.content_frame.columnconfigure(0, weight=1)
+        self.content_frame.rowconfigure(2, weight=1)
         
         # Variables para almacenar la venta y productos seleccionados
         self.venta_devolucion = None
@@ -774,12 +966,12 @@ class SistemaElectrodomesticos:
     
     def create_reportes_widgets(self):
         # Título
-        title_label = ttk.Label(self.reportes_frame, text="Reportes y Dashboard", 
+        title_label = ttk.Label(self.content_frame, text="Reportes y Dashboard", 
                                font=("Arial", 16, "bold"), bootstyle="inverse-primary")
         title_label.grid(row=0, column=0, columnspan=2, pady=(0, 20), sticky="ew")
         
         # Frame para filtros
-        filters_frame = ttk.Labelframe(self.reportes_frame, text="Filtros", 
+        filters_frame = ttk.Labelframe(self.content_frame, text="Filtros", 
                                       padding="10", bootstyle="info")
         filters_frame.grid(row=1, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
         
@@ -797,7 +989,7 @@ class SistemaElectrodomesticos:
                   bootstyle="info-outline").grid(row=0, column=4, padx=(10, 0))
         
         # KPIs
-        kpi_frame = ttk.Labelframe(self.reportes_frame, text="Indicadores Clave", 
+        kpi_frame = ttk.Labelframe(self.content_frame, text="Indicadores Clave", 
                                   padding="10", bootstyle="primary")
         kpi_frame.grid(row=2, column=0, sticky=(tk.W, tk.E, tk.N), pady=(0, 10), padx=(0, 10))
         
@@ -818,7 +1010,7 @@ class SistemaElectrodomesticos:
                  bootstyle="primary").grid(row=3, column=0, sticky=tk.W, pady=5)
         
         # Reporte detallado
-        report_frame = ttk.Labelframe(self.reportes_frame, text="Reporte Detallado", 
+        report_frame = ttk.Labelframe(self.content_frame, text="Reporte Detallado", 
                                      padding="10", bootstyle="secondary")
         report_frame.grid(row=2, column=1, rowspan=2, sticky=(tk.N, tk.E, tk.S, tk.W))
         report_frame.columnconfigure(0, weight=1)
@@ -846,19 +1038,19 @@ class SistemaElectrodomesticos:
         scrollbar.grid(row=0, column=1, sticky=(tk.N, tk.S))
         
         # Configurar grid
-        self.reportes_frame.columnconfigure(1, weight=1)
-        self.reportes_frame.rowconfigure(2, weight=1)
+        self.content_frame.columnconfigure(1, weight=1)
+        self.content_frame.rowconfigure(2, weight=1)
         report_frame.columnconfigure(0, weight=1)
         report_frame.rowconfigure(0, weight=1)
     
     def create_microservicios_widgets(self):
         # Título
-        title_label = ttk.Label(self.microservicios_frame, text="Monitor de Microservicios", 
+        title_label = ttk.Label(self.content_frame, text="Monitor de Microservicios", 
                                font=("Arial", 16, "bold"), bootstyle="inverse-primary")
         title_label.grid(row=0, column=0, columnspan=2, pady=(0, 20), sticky="ew")
         
         # Log de eventos
-        log_frame = ttk.Labelframe(self.microservicios_frame, text="Eventos del Sistema", 
+        log_frame = ttk.Labelframe(self.content_frame, text="Eventos del Sistema", 
                                   padding="10", bootstyle="primary")
         log_frame.grid(row=1, column=0, columnspan=2, sticky=(tk.N, tk.E, tk.S, tk.W))
         log_frame.columnconfigure(0, weight=1)
@@ -869,7 +1061,7 @@ class SistemaElectrodomesticos:
         self.log_text.config(state=tk.DISABLED)
         
         # Botones de control
-        btn_frame = ttk.Frame(self.microservicios_frame)
+        btn_frame = ttk.Frame(self.content_frame)
         btn_frame.grid(row=2, column=0, columnspan=2, pady=(10, 0))
         
         ttk.Button(btn_frame, text="Limpiar Log", command=self.limpiar_log, 
@@ -878,10 +1070,17 @@ class SistemaElectrodomesticos:
                   bootstyle="info").pack(side=tk.LEFT, padx=5)
         
         # Configurar grid
-        self.microservicios_frame.columnconfigure(0, weight=1)
-        self.microservicios_frame.rowconfigure(1, weight=1)
+        self.content_frame.columnconfigure(0, weight=1)
+        self.content_frame.rowconfigure(1, weight=1)
+
+    # AQUÍ CONTINÚAN TODOS LOS MÉTODOS ORIGINALES RESTANTES
+    # [Todos los métodos desde load_products() hasta el final se mantienen IDÉNTICOS]
     
     def load_products(self):
+        # Si la vista de inventario aún no existe (la interfaz la crea al navegar), salir
+        if not hasattr(self, 'inv_tree'):
+            return
+
         # Limpiar treeview
         for item in self.inv_tree.get_children():
             self.inv_tree.delete(item)
@@ -1616,7 +1815,6 @@ class SistemaElectrodomesticos:
         ttk.Entry(login_window, textvariable=usuario_var, bootstyle="info").grid(row=0, column=1, padx=10, pady=10, sticky=(tk.W, tk.E))
         
         ttk.Label(login_window, text="Contraseña:", bootstyle="info").grid(row=1, column=0, padx=10, pady=10, sticky=tk.W)
-       
         password_var = tk.StringVar()
         ttk.Entry(login_window, textvariable=password_var, show="*", bootstyle="info").grid(row=1, column=1, padx=10, pady=10, sticky=(tk.W, tk.E))
         
@@ -1624,7 +1822,6 @@ class SistemaElectrodomesticos:
         
         def verificar():
             cursor = self.conn.cursor()
-           
             password_hash = hashlib.sha256(password_var.get().encode()).hexdigest()
             cursor.execute("SELECT * FROM usuarios WHERE username = ? AND password = ? AND rol = 'gerente'",
                            (usuario_var.get(), password_hash))
@@ -1648,7 +1845,6 @@ class SistemaElectrodomesticos:
         self.devolucion_venta_info_var.set("Venta: ---")
         for item in self.devolucion_tree.get_children():
             self.devolucion_tree.delete(item)
-       
         self.devolucion_producto_var.set("")
         self.devolucion_cantidad_var.set(1)
         self.devolucion_estado_var.set("")

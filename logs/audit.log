@@ -1,0 +1,22 @@
+2025-11-03 21:10:52,196 - Login exitoso: admin
+2025-11-03 21:10:52,334 - Producto creado: Producto Test por admin
+2025-11-03 21:10:52,660 - Devolución procesada: 1 por admin
+2025-11-03 21:10:53,501 - Login exitoso: admin
+2025-11-03 21:10:53,540 - Producto creado: Producto Test 2 por admin
+2025-11-03 21:10:53,550 - Error al crear venta por admin: 500: Stock insuficiente para el producto 12
+2025-11-03 21:32:27,949 - Login exitoso: admin
+2025-11-03 21:32:28,030 - Intento de creación de producto fallido: código o serie duplicado por admin
+2025-11-03 21:32:29,594 - Login exitoso: admin
+2025-11-03 21:32:29,609 - Intento de creación de producto fallido: código o serie duplicado por admin
+2025-11-03 21:33:08,590 - Login exitoso: admin
+2025-11-03 21:33:08,651 - Intento de creación de producto fallido: código o serie duplicado por admin
+2025-11-03 21:35:36,271 - Login exitoso: admin
+2025-11-03 21:35:36,317 - Producto creado: Producto Test por admin
+2025-11-03 21:35:36,528 - Devolución procesada: 1 por admin
+2025-11-03 21:35:37,373 - Login exitoso: admin
+2025-11-03 21:35:37,439 - Producto creado: Producto Test 2 por admin
+2025-11-03 21:35:37,451 - Error al crear venta por admin: 500: Stock insuficiente para el producto 2
+2025-11-03 22:21:26,875 - Login exitoso: admin
+2025-11-03 22:21:26,889 - Intento de creación de producto fallido: código o serie duplicado por admin
+2025-11-03 22:21:28,052 - Login exitoso: admin
+2025-11-03 22:21:28,064 - Intento de creación de producto fallido: código o serie duplicado por admin
