@@ -12,9 +12,9 @@ from logging.handlers import RotatingFileHandler
 import os
 from fastapi.responses import JSONResponse
 import bcrypt
-from logging_config import audit_logger
+from src.logging_config import audit_logger
 from prometheus_fastapi_instrumentator import Instrumentator
-from main import SessionLocal, ProductoModel, VentaModel, DetalleVentaModel, DevolucionModel, UsuarioModel, ProductoSchema
+from src.main import SessionLocal, ProductoModel, VentaModel, DetalleVentaModel, DevolucionModel, UsuarioModel, ProductoSchema
 
 # Configuración de logging
 logging.basicConfig(level=logging.INFO)
