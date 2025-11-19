@@ -1,8 +1,0 @@
-2025-11-03 21:33:08,572 - api - INFO - Usuario admin ha iniciado sesión
-2025-11-03 21:33:08,595 - httpx - INFO - HTTP Request: POST http://testserver/login "HTTP/1.1 200 OK"
-2025-11-03 21:33:08,704 - httpx - INFO - HTTP Request: POST http://testserver/productos "HTTP/1.1 400 Bad Request"
-2025-11-10 21:10:21,188 - fastapi - ERROR - Form data requires "python-multipart" to be installed. 
-You can install "python-multipart" with: 
-
-pip install python-multipart
-
