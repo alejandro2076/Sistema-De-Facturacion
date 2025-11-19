@@ -252,6 +252,8 @@ class SistemaElectrodomesticos:
         # Mostrar pantalla inicial por defecto (sin dashboard)
         self.mostrar_home()
         
+        self.log_text = None  # Inicializar log_text como None
+        
     def create_new_interface(self):
         # Crear contenedor principal
         self.main_container = ttk.Frame(self.root)
@@ -1619,7 +1621,7 @@ class SistemaElectrodomesticos:
             return
         
         values = self.inv_tree.item(selected_item, 'values')
-        product_id, nombre = values[0], values[2]
+        product_id, nombre = values[0], values[2];
         
         confirmacion = messagebox.askyesno("Confirmar Eliminación", f"¿Está seguro de eliminar el producto '{nombre}'?")
         if not confirmacion:
@@ -1938,16 +1940,22 @@ class SistemaElectrodomesticos:
     
     def log_evento(self, mensaje):
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        self.log_text.config(state=tk.NORMAL)
-        self.log_text.insert(tk.END, f"[{timestamp}] {mensaje}\n")
-        self.log_text.config(state=tk.DISABLED)
-        self.log_text.see(tk.END)
+        if self.log_text:
+            self.log_text.config(state=tk.NORMAL)
+            self.log_text.insert(tk.END, f"[{timestamp}] {mensaje}\n")
+            self.log_text.config(state=tk.DISABLED)
+            self.log_text.see(tk.END)
+        else:
+            print(f"[{timestamp}] {mensaje}")
     
     def limpiar_log(self):
-        self.log_text.config(state=tk.NORMAL)
-        self.log_text.delete(1.0, tk.END)
-        self.log_text.config(state=tk.DISABLED)
-    
+        if self.log_text:
+            self.log_text.config(state=tk.NORMAL)
+            self.log_text.delete(1.0, tk.END)
+            self.log_text.config(state=tk.DISABLED)
+        else:
+            print("No hay widget de log para limpiar.")
+
     def exportar_eventos(self):
         # Exportar eventos a un archivo JSON
         filename = f"eventos_sistema_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
