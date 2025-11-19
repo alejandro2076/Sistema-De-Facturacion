@@ -94,9 +94,11 @@ class LoginRequest(BaseModel):
 
 # Utilidades de base de datos
 def get_db_connection():
-    db_path = os.environ.get('ELECTROSTORE_DB', 'electrostore.db')
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
+    db_url = os.environ.get('DATABASE_URL', 'postgresql+psycopg2://Admin:password@localhost:9040/electrostore')
+    import sqlalchemy
+    engine = sqlalchemy.create_engine(db_url)
+    conn = engine.raw_connection()
+    conn.row_factory = None  # PostgreSQL no soporta row_factory
     return conn
 
 # Utilidades de autenticación
@@ -195,7 +197,7 @@ def obtener_producto(producto_id: int, payload: dict = Depends(verificar_token))
 
 @app.post("/productos", response_model=Producto)
 def crear_producto(producto: Producto, payload: dict = Depends(verificar_token)):
-    if payload["rol"] not in ["admin", "gerente"]:
+    if payload["rol"] not in ["admin", "gerente", "almacen"]:
         audit_logger.info(f"Intento de creación de producto sin permisos por {payload['sub']}")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -238,7 +240,7 @@ def crear_producto(producto: Producto, payload: dict = Depends(verificar_token))
 def obtener_ventas(skip: int = 0, limit: int = 100, payload: dict = Depends(verificar_token)):
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM ventas ORDER BY fecha DESC LIMIT ? OFFSET ?", (limit, skip))
+    cursor.execute("SELECT * FROM ventas ORDER BY fecha DESC LIMIT %s OFFSET %s", (limit, skip))
     ventas = cursor.fetchall()
     return [dict(venta) for venta in ventas]
 
@@ -293,8 +295,8 @@ def crear_venta(venta: VentaCreate, payload: dict = Depends(verificar_token)):
         }
     except HTTPException as e:
         db.rollback()
-        logger.error(f"Error al crear venta: {str(e)}")
-        audit_logger.info(f"Error al crear venta por {payload['sub']}: {str(e)}")
+        logger.error(f"Error HTTP al crear venta: {str(e)}")
+        audit_logger.info(f"Error HTTP al crear venta por {payload['sub']}: {str(e)}")
         raise
     except Exception as e:
         db.rollback()
@@ -348,13 +350,18 @@ def crear_devolucion(devolucion: Devolucion, payload: dict = Depends(verificar_t
             "fecha": fecha,
             "autorizado_por": autorizado_por
         }
+    except HTTPException as e:
+        db.rollback()
+        logger.error(f"Error HTTP al procesar devolución: {str(e)}")
+        audit_logger.info(f"Error HTTP al procesar devolución por {payload['sub']}: {str(e)}")
+        raise
     except Exception as e:
         db.rollback()
         logger.error(f"Error al procesar devolución: {str(e)}")
         audit_logger.info(f"Error al procesar devolución por {payload['sub']}: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Error al procesar la devolución"
+            detail=f"Error al procesar la devolución: {str(e)}"
         )
     finally:
         db.close()

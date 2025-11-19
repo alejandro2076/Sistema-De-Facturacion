@@ -36,7 +36,10 @@ db_file = os.environ.get("ELECTROSTORE_DB")
 if db_file:
     DATABASE_URL = f"sqlite:///{db_file}"
 else:
-    DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///electrostore.db")
+    DATABASE_URL = os.environ.get(
+        "DATABASE_URL",
+        "postgresql+psycopg2://Admin:password@localhost:9040/electrostore"
+    )
 
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False} if "sqlite" in DATABASE_URL else {})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

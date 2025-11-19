@@ -1,0 +1,98 @@
+2025-11-19 11:01:44,720 - Usuario registrado: audit
+2025-11-19 11:01:45,011 - Login exitoso: audit
+2025-11-19 11:01:45,030 - Intento de creación de producto sin permisos por audit
+2025-11-19 11:01:45,091 - Error al procesar devolución por audit: 403: Esta devolución requiere autorización de un gerente
+2025-11-19 11:14:47,755 - Usuario registrado: testuser
+2025-11-19 11:14:48,036 - Login exitoso: testuser
+2025-11-19 11:14:48,056 - Intento de login fallido: usuario no encontrado o contraseña incorrecta fake
+2025-11-19 11:14:48,354 - Login exitoso: testuser
+2025-11-19 11:14:48,365 - Intento de creación de producto sin permisos por testuser
+2025-11-19 11:14:48,701 - Login exitoso: testuser
+2025-11-19 11:14:49,009 - Login exitoso: testuser
+2025-11-19 11:14:49,020 - Error al procesar devolución por testuser: 403: Esta devolución requiere autorización de un gerente
+2025-11-19 11:16:53,964 - Intento de registro fallido para usuario existente: testuser
+2025-11-19 11:16:54,449 - Login exitoso: testuser
+2025-11-19 11:16:54,649 - Intento de login fallido: usuario no encontrado o contraseña incorrecta fake
+2025-11-19 11:16:55,507 - Login exitoso: testuser
+2025-11-19 11:16:55,519 - Intento de creación de producto sin permisos por testuser
+2025-11-19 11:16:55,873 - Login exitoso: testuser
+2025-11-19 11:16:56,405 - Login exitoso: testuser
+2025-11-19 11:16:56,420 - Error al procesar devolución por testuser: 403: Esta devolución requiere autorización de un gerente
+2025-11-19 11:16:57,051 - Intento de login fallido: usuario no encontrado o contraseña incorrecta admin
+2025-11-19 11:16:57,441 - Login exitoso: testuser
+2025-11-19 11:16:57,448 - Intento de creación de producto sin permisos por testuser
+2025-11-19 11:16:57,769 - Login exitoso: testuser
+2025-11-19 11:16:58,235 - Login exitoso: testuser
+2025-11-19 11:21:25,126 - Intento de registro fallido para usuario existente: testuser
+2025-11-19 11:21:25,413 - Login exitoso: testuser
+2025-11-19 11:21:25,437 - Intento de login fallido: usuario no encontrado o contraseña incorrecta fake
+2025-11-19 11:21:25,752 - Login exitoso: testuser
+2025-11-19 11:21:25,759 - Intento de creación de producto sin permisos por testuser
+2025-11-19 11:21:26,044 - Login exitoso: testuser
+2025-11-19 11:21:26,334 - Login exitoso: testuser
+2025-11-19 11:21:26,344 - Error al procesar devolución por testuser: 403: Esta devolución requiere autorización de un gerente
+2025-11-19 11:21:26,824 - Intento de login fallido: usuario no encontrado o contraseña incorrecta admin
+2025-11-19 11:21:27,131 - Login exitoso: testuser
+2025-11-19 11:21:27,136 - Intento de creación de producto sin permisos por testuser
+2025-11-19 11:21:27,429 - Login exitoso: testuser
+2025-11-19 11:21:27,732 - Login exitoso: testuser
+2025-11-19 11:22:26,313 - Intento de registro fallido para usuario existente: testuser
+2025-11-19 11:22:26,616 - Login exitoso: testuser
+2025-11-19 11:22:26,718 - Intento de login fallido: usuario no encontrado o contraseña incorrecta fake
+2025-11-19 11:22:27,073 - Login exitoso: testuser
+2025-11-19 11:22:27,080 - Intento de creación de producto sin permisos por testuser
+2025-11-19 11:22:27,374 - Login exitoso: testuser
+2025-11-19 11:22:27,671 - Login exitoso: testuser
+2025-11-19 11:22:27,681 - Error HTTP al procesar devolución por testuser: 403: Esta devolución requiere autorización de un gerente
+2025-11-19 11:22:27,973 - Intento de login fallido: usuario no encontrado o contraseña incorrecta admin
+2025-11-19 11:22:28,474 - Login exitoso: testuser
+2025-11-19 11:22:28,481 - Intento de creación de producto sin permisos por testuser
+2025-11-19 11:22:28,786 - Login exitoso: testuser
+2025-11-19 11:22:29,088 - Login exitoso: testuser
+2025-11-19 13:07:03,289 - Usuario registrado: audit
+2025-11-19 13:07:03,590 - Login exitoso: audit
+2025-11-19 13:07:03,642 - Intento de creación de producto sin permisos por audit
+2025-11-19 13:08:46,961 - Intento de registro fallido para usuario existente: audit
+2025-11-19 13:08:47,248 - Login exitoso: audit
+2025-11-19 13:08:47,286 - Intento de creación de producto sin permisos por audit
+2025-11-19 13:08:47,409 - Error HTTP al procesar devolución por audit: 404: Producto no encontrado
+2025-11-19 13:09:23,138 - Usuario registrado: testuser
+2025-11-19 13:09:23,422 - Login exitoso: testuser
+2025-11-19 13:09:23,453 - Intento de login fallido: usuario no encontrado o contraseña incorrecta fake
+2025-11-19 13:09:23,768 - Login exitoso: testuser
+2025-11-19 13:09:23,779 - Intento de creación de producto sin permisos por testuser
+2025-11-19 13:09:24,105 - Login exitoso: testuser
+2025-11-19 13:09:24,462 - Login exitoso: testuser
+2025-11-19 13:09:24,474 - Error HTTP al procesar devolución por testuser: 404: Producto no encontrado
+2025-11-19 13:09:24,489 - Intento de login fallido: usuario no encontrado o contraseña incorrecta admin
+2025-11-19 13:09:25,101 - Login exitoso: testuser
+2025-11-19 13:09:25,109 - Intento de creación de producto sin permisos por testuser
+2025-11-19 13:09:25,405 - Login exitoso: testuser
+2025-11-19 13:09:25,734 - Login exitoso: testuser
+2025-11-19 13:13:15,720 - Intento de registro fallido para usuario existente: testuser
+2025-11-19 13:13:16,039 - Login exitoso: testuser
+2025-11-19 13:13:16,068 - Intento de login fallido: usuario no encontrado o contraseña incorrecta fake
+2025-11-19 13:13:16,380 - Login exitoso: testuser
+2025-11-19 13:13:16,389 - Intento de creación de producto sin permisos por testuser
+2025-11-19 13:13:16,695 - Login exitoso: testuser
+2025-11-19 13:13:17,045 - Login exitoso: testuser
+2025-11-19 13:13:17,060 - Error HTTP al procesar devolución por testuser: 404: Producto no encontrado
+2025-11-19 13:13:17,075 - Intento de login fallido: usuario no encontrado o contraseña incorrecta admin
+2025-11-19 13:13:17,622 - Login exitoso: testuser
+2025-11-19 13:13:17,633 - Intento de creación de producto sin permisos por testuser
+2025-11-19 13:13:17,943 - Login exitoso: testuser
+2025-11-19 13:13:18,346 - Login exitoso: testuser
+2025-11-19 13:14:25,597 - Intento de registro fallido para usuario existente: testuser
+2025-11-19 13:14:25,874 - Login exitoso: testuser
+2025-11-19 13:14:25,906 - Intento de login fallido: usuario no encontrado o contraseña incorrecta fake
+2025-11-19 13:14:26,240 - Login exitoso: testuser
+2025-11-19 13:14:26,248 - Intento de creación de producto sin permisos por testuser
+2025-11-19 13:14:26,539 - Login exitoso: testuser
+2025-11-19 13:14:26,873 - Login exitoso: testuser
+2025-11-19 13:14:26,886 - Error HTTP al procesar devolución por testuser: 404: Producto no encontrado
+2025-11-19 13:14:27,184 - Login exitoso: almacen
+2025-11-19 13:14:27,218 - Producto creado: Producto Admin Test por almacen
+2025-11-19 13:14:27,532 - Login exitoso: testuser
+2025-11-19 13:14:27,540 - Intento de creación de producto sin permisos por testuser
+2025-11-19 13:14:27,837 - Login exitoso: testuser
+2025-11-19 13:14:28,139 - Login exitoso: testuser

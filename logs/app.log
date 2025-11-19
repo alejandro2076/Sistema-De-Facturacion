@@ -1,0 +1,31 @@
+2025-11-19 11:01:44,731 - httpx - INFO - HTTP Request: POST http://testserver/register "HTTP/1.1 200 OK"
+2025-11-19 11:01:45,011 - src.api - INFO - Usuario audit ha iniciado sesión
+2025-11-19 11:01:45,014 - httpx - INFO - HTTP Request: POST http://testserver/login "HTTP/1.1 200 OK"
+2025-11-19 11:01:45,023 - httpx - INFO - HTTP Request: GET http://testserver/productos "HTTP/1.1 200 OK"
+2025-11-19 11:01:45,032 - httpx - INFO - HTTP Request: POST http://testserver/productos "HTTP/1.1 403 Forbidden"
+2025-11-19 11:01:45,033 - root - INFO - Intento de creación de producto sin permisos correctamente bloqueado.
+2025-11-19 11:01:45,073 - httpx - INFO - HTTP Request: GET http://testserver/ventas "HTTP/1.1 200 OK"
+2025-11-19 11:01:45,091 - src.api - ERROR - Error al procesar devolución: 403: Esta devolución requiere autorización de un gerente
+2025-11-19 11:01:45,095 - httpx - INFO - HTTP Request: POST http://testserver/devoluciones "HTTP/1.1 500 Internal Server Error"
+2025-11-19 11:01:45,095 - root - WARNING - Respuesta inesperada en /devoluciones: 500
+2025-11-19 13:07:03,299 - httpx - INFO - HTTP Request: POST http://testserver/register "HTTP/1.1 200 OK"
+2025-11-19 13:07:03,589 - src.api - INFO - Usuario audit ha iniciado sesión
+2025-11-19 13:07:03,592 - httpx - INFO - HTTP Request: POST http://testserver/login "HTTP/1.1 200 OK"
+2025-11-19 13:07:03,614 - httpx - INFO - HTTP Request: GET http://testserver/productos "HTTP/1.1 200 OK"
+2025-11-19 13:07:03,629 - root - WARNING - No hay productos registrados en el sistema.
+2025-11-19 13:07:03,645 - httpx - INFO - HTTP Request: POST http://testserver/productos "HTTP/1.1 403 Forbidden"
+2025-11-19 13:07:03,659 - root - INFO - Intento de creación de producto sin permisos correctamente bloqueado.
+2025-11-19 13:07:03,753 - src.api - ERROR - Error no manejado: syntax error at or near "OFFSET"
+LINE 1: SELECT * FROM ventas ORDER BY fecha DESC LIMIT ? OFFSET ?
+                                                         ^
+
+2025-11-19 13:08:46,968 - httpx - INFO - HTTP Request: POST http://testserver/register "HTTP/1.1 400 Bad Request"
+2025-11-19 13:08:47,247 - src.api - INFO - Usuario audit ha iniciado sesión
+2025-11-19 13:08:47,250 - httpx - INFO - HTTP Request: POST http://testserver/login "HTTP/1.1 200 OK"
+2025-11-19 13:08:47,267 - httpx - INFO - HTTP Request: GET http://testserver/productos "HTTP/1.1 200 OK"
+2025-11-19 13:08:47,267 - root - WARNING - No hay productos registrados en el sistema.
+2025-11-19 13:08:47,289 - httpx - INFO - HTTP Request: POST http://testserver/productos "HTTP/1.1 403 Forbidden"
+2025-11-19 13:08:47,289 - root - INFO - Intento de creación de producto sin permisos correctamente bloqueado.
+2025-11-19 13:08:47,397 - httpx - INFO - HTTP Request: GET http://testserver/ventas "HTTP/1.1 200 OK"
+2025-11-19 13:08:47,409 - src.api - ERROR - Error HTTP al procesar devolución: 404: Producto no encontrado
+2025-11-19 13:08:47,411 - httpx - INFO - HTTP Request: POST http://testserver/devoluciones "HTTP/1.1 404 Not Found"
