@@ -1,0 +1,17 @@
+version: '3.8'
+services:
+  postgres:
+    image: postgres:15
+    container_name: electrostore-postgres
+    environment:
+      POSTGRES_USER: Admin
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: electrostore
+    ports:
+      - "9040:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

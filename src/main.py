@@ -4,7 +4,6 @@ import tkinter as tk
 from tkinter import messagebox, scrolledtext
 from sqlalchemy import create_engine, Column, Integer, String, Float
 from sqlalchemy.orm import declarative_base, sessionmaker
-import sqlite3
 from datetime import datetime, timedelta
 import random
 import string
@@ -119,29 +118,32 @@ class Microservicio(ABC):
         pass
 
 class ServicioInventario(Microservicio):
-    def __init__(self, conn):
-        self.conn = conn
+    def __init__(self, db_session):
+        self.db_session = db_session
         self.alertas_stock_bajo = []
     
     @manejar_errores
     def procesar_evento(self, evento):
         if evento['tipo'] == 'VENTA':
-            cursor = self.conn.cursor()
             for producto in evento['productos']:
-                cursor.execute("UPDATE productos SET stock = stock - ? WHERE id = ?", 
-                              (producto['cantidad'], producto['id']))
-            cursor.execute("SELECT nombre, stock FROM productos WHERE stock <= 5")
-            productos_bajos = cursor.fetchall()
+                self.db_session.execute(
+                    "UPDATE productos SET stock = stock - :cantidad WHERE id = :id", 
+                    {"cantidad": producto['cantidad'], "id": producto['id']}
+                )
+            productos_bajos = self.db_session.execute(
+                "SELECT nombre, stock FROM productos WHERE stock <= 5"
+            ).fetchall()
             for producto in productos_bajos:
                 if producto not in self.alertas_stock_bajo:
                     self.alertas_stock_bajo.append(producto)
                     print(f"ALERTA: Stock bajo de {producto[0]} - {producto[1]} unidades")
-            self.conn.commit()
+            self.db_session.commit()
         elif evento['tipo'] == 'DEVOLUCION' and evento['estado_producto'] == 'vendible':
-            cursor = self.conn.cursor()
-            cursor.execute("UPDATE productos SET stock = stock + ? WHERE id = ?", 
-                          (evento['cantidad'], evento['producto_id']))
-            self.conn.commit()
+            self.db_session.execute(
+                "UPDATE productos SET stock = stock + :cantidad WHERE id = :id", 
+                {"cantidad": evento['cantidad'], "id": evento['producto_id']}
+            )
+            self.db_session.commit()
 
 class ServicioContabilidad(Microservicio):
     def __init__(self):
@@ -161,13 +163,13 @@ class ServicioContabilidad(Microservicio):
             print(f"Registrado egreso de ${evento['monto']} en contabilidad")
 
 class ServicioAutorizaciones(Microservicio):
-    def __init__(self, conn):
-        self.conn = conn
+    def __init__(self, db_session):
+        self.db_session = db_session
         self.gerentes = []
         self.cargar_gerentes()
     
     def cargar_gerentes(self):
-        cursor = self.conn.cursor()
+        cursor = self.db_session.cursor()
         cursor.execute("SELECT username FROM usuarios WHERE rol = 'gerente'")
         self.gerentes = [row[0] for row in cursor.fetchall()]
     
@@ -220,17 +222,13 @@ class SistemaElectrodomesticos:
         self.ventas_dia = 0.0
         
         # Conectar a la base de datos
-        self.conn = sqlite3.connect('electrostore.db')
-        self.create_tables()
-        
-        # Cargar datos iniciales si la base de datos está vacía
-        self.load_initial_data()
+        self.db_session = SessionLocal()
+        self.inventario_service = ServicioInventario(self.db_session)
+        self.autorizaciones_service = ServicioAutorizaciones(self.db_session)
         
         # Configurar sistema de microservicios
         self.kafka = KafkaSimulator()
-        self.inventario_service = ServicioInventario(self.conn)
         self.contabilidad_service = ServicioContabilidad()
-        self.autorizaciones_service = ServicioAutorizaciones(self.conn)
         
         # Suscribir microservicios a topics
         self.kafka.suscribir('inventario', self.inventario_service)
@@ -258,35 +256,55 @@ class SistemaElectrodomesticos:
         # Crear contenedor principal
         self.main_container = ttk.Frame(self.root)
         self.main_container.pack(fill=tk.BOTH, expand=True)
-        
+
         # HEADER SUPERIOR
         self.create_header()
-        
-        # CONTENEDOR PRINCIPAL (Sidebar + Content)
+
+        # CONTENEDOR PRINCIPAL (Sidebar + Content) usando grid
         self.content_container = ttk.Frame(self.main_container)
         self.content_container.pack(fill=tk.BOTH, expand=True)
-        # Main container (fills root). We'll use grid inside content_container
-        # header on top
-        self.create_header()
+        self.content_container.columnconfigure(0, weight=0, minsize=200)
+        self.content_container.columnconfigure(1, weight=1)
+        self.content_container.rowconfigure(0, weight=1)
 
-        # content container holds sidebar and main content using grid so layout
-        # can be responsive (column weight configuration)
-        try:
-            self.content_container.columnconfigure(0, weight=0, minsize=200)
-            self.content_container.columnconfigure(1, weight=1)
-            self.content_container.rowconfigure(0, weight=1)
-        except Exception:
-            # Algunos backends no usan grid; esta configuración es segura si existe
-            pass
+        # SIDEBAR IZQUIERDO (solo grid)
+        self.sidebar_frame = ttk.Frame(self.content_container, width=250, bootstyle="secondary")
+        self.sidebar_frame.grid(row=0, column=0, sticky=(tk.N, tk.S, tk.W), padx=(0, 5))
+        self.sidebar_frame.grid_propagate(False)
 
-        # Estado para controlar la visibilidad del sidebar
-        self.sidebar_visible = True
+        # Información compacta de la tienda
+        shop_frame = ttk.Frame(self.sidebar_frame, padding=8)
+        shop_frame.pack(fill=tk.X, padx=5, pady=6)
+        ttk.Label(shop_frame, text="ElectroStore", font=("Arial", 11, "bold"), bootstyle="primary").pack(anchor=tk.W)
+        ttk.Label(shop_frame, text="Sistema de Facturación", font=("Arial", 9), bootstyle="secondary").pack(anchor=tk.W)
+        ttk.Separator(self.sidebar_frame, orient=tk.HORIZONTAL).pack(fill=tk.X, padx=5, pady=8)
 
-        # SIDEBAR IZQUIERDO
-        self.create_sidebar()
+        # Navegación
+        nav_frame = ttk.Frame(self.sidebar_frame)
+        nav_frame.pack(fill=tk.X, padx=5)
+        nav_buttons = [
+            ("📅 Calendario", self.mostrar_calendario),
+            ("💰 Punto de Venta", self.mostrar_ventas),
+            ("📦 Inventario", self.mostrar_inventario),
+            ("💵 Control de Caja", self.mostrar_caja),
+            ("🔄 Devoluciones", self.mostrar_devoluciones),
+            ("📈 Reportes", self.mostrar_reportes),
+            ("⚙️ Microservicios", self.mostrar_microservicios)
+        ]
+        for text, command in nav_buttons:
+            btn = ttk.Button(nav_frame, text=text, command=command,
+                              bootstyle="primary", width=20)
+            btn.pack(fill=tk.X, pady=6)
 
-        # CONTENIDO PRINCIPAL
-        self.create_main_content()
+        # CONTENIDO PRINCIPAL (solo grid)
+        self.main_content = ttk.Frame(self.content_container)
+        self.main_content.grid(row=0, column=1, sticky=(tk.N, tk.S, tk.E, tk.W), padx=10, pady=10)
+        self.content_container.rowconfigure(0, weight=1)
+        self.content_container.columnconfigure(1, weight=1)
+
+        # Frame para el contenido dinámico
+        self.content_frame = ttk.Frame(self.main_content)
+        self.content_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
         # Inicializar carrito
         self.carrito = []
@@ -451,7 +469,7 @@ class SistemaElectrodomesticos:
     # AQUÍ COMIENZAN TODOS LOS MÉTODOS ORIGINALES (se mantienen exactamente igual)
     
     def create_tables(self):
-        cursor = self.conn.cursor()
+        cursor = self.db_session.cursor()
         
         # Tabla de productos
         cursor.execute('''
@@ -571,10 +589,10 @@ class SistemaElectrodomesticos:
             cursor.execute("INSERT INTO usuarios (username, password, rol, nombre) VALUES (?, ?, ?, ?)",
                           ('admin', password_hash, 'gerente', 'Administrador'))
         
-        self.conn.commit()
+        self.db_session.commit()
     
     def load_initial_data(self):
-        cursor = self.conn.cursor()
+        cursor = self.db_session.cursor()
         
         # Verificar si ya hay productos
         cursor.execute("SELECT COUNT(*) FROM productos")
@@ -619,7 +637,7 @@ class SistemaElectrodomesticos:
                 ('NC-', 1, 'nota_credito')
             ''')
             
-            self.conn.commit()
+            self.db_session.commit()
     
     def create_ventas_widgets(self):
         # Título
@@ -1094,7 +1112,7 @@ class SistemaElectrodomesticos:
             self.inv_tree.delete(item)
         
         # Cargar productos desde la base de datos
-        cursor = self.conn.cursor()
+        cursor = self.db_session.cursor()
         cursor.execute("SELECT id, codigo_barras, nombre, precio, stock, categoria, numero_serie FROM productos ORDER BY nombre")
         productos = cursor.fetchall()
         
@@ -1107,7 +1125,7 @@ class SistemaElectrodomesticos:
             messagebox.showwarning("Advertencia", "Por favor ingrese un código de barras")
             return
         
-        cursor = self.conn.cursor()
+        cursor = self.db_session.cursor()
         cursor.execute("SELECT id, nombre, precio, stock FROM productos WHERE codigo_barras = ?", (codigo,))
         producto = cursor.fetchone()
         
@@ -1130,7 +1148,7 @@ class SistemaElectrodomesticos:
             messagebox.showwarning("Advertencia", "Por favor ingrese un nombre de producto")
             return
         
-        cursor = self.conn.cursor()
+        cursor = self.db_session.cursor()
         cursor.execute("SELECT id, nombre, precio, stock, codigo_barras FROM productos WHERE nombre LIKE ?", (f'%{nombre}%',))
         productos = cursor.fetchall()
         
@@ -1251,7 +1269,7 @@ class SistemaElectrodomesticos:
     
     def actualizar_autocompletado_productos(self, event=None):
         texto = self.productos_autocomplete_var.get().lower()
-        cursor = self.conn.cursor()
+        cursor = self.db_session.cursor()
         cursor.execute("SELECT nombre, categoria, codigo_barras, stock, precio FROM productos WHERE nombre LIKE ? OR categoria LIKE ? OR codigo_barras LIKE ?", (f"%{texto}%", f"%{texto}%", f"%{texto}%"))
         resultados = cursor.fetchall()
         opciones = [f"{r[0]} | {r[1]} | {r[2]} | Stock: {r[3]} | ${r[4]:.2f}" for r in resultados]
@@ -1267,7 +1285,7 @@ class SistemaElectrodomesticos:
         nombre = partes[0].strip()
         categoria = partes[1].strip()
         codigo = partes[2].strip()
-        cursor = self.conn.cursor()
+        cursor = self.db_session.cursor()
         cursor.execute("SELECT id, nombre, precio, stock, categoria, codigo_barras FROM productos WHERE nombre=? AND categoria=? AND codigo_barras=?", (nombre, categoria, codigo))
         producto = cursor.fetchone()
         if producto:
@@ -1324,7 +1342,7 @@ class SistemaElectrodomesticos:
         if not confirmacion:
             return
         
-        cursor = self.conn.cursor()
+        cursor = self.db_session.cursor()
         
         try:
             # Calcular total de la venta
@@ -1373,7 +1391,7 @@ class SistemaElectrodomesticos:
             self.ventas_hoy_var.set(f"Ventas hoy: ${self.ventas_dia:.2f}")
             
             # Confirmar transacción
-            self.conn.commit()
+            self.db_session.commit()
             
             # Mostrar mensaje de éxito
             messagebox.showinfo("Venta Realizada", f"Venta realizada con éxito. Total: ${total_final:.2f}\nIGTF: ${igtf:.2f}\nIVA: ${iva:.2f}")
@@ -1381,7 +1399,7 @@ class SistemaElectrodomesticos:
             self.generar_factura_pdf(venta_id, fecha, metodo_pago, total_venta, igtf, iva, total_final)
             
         except Exception as e:
-            self.conn.rollback()
+            self.db_session.rollback()
             messagebox.showerror("Error", f"Ocurrió un error al procesar la venta: {str(e)}")
             self.log_evento(f"Error en venta: {str(e)}")
     
@@ -1422,7 +1440,7 @@ class SistemaElectrodomesticos:
             messagebox.showerror("Error", "El monto inicial no puede ser negativo")
             return
         
-        cursor = self.conn.cursor()
+        cursor = self.db_session.cursor()
         
         try:
             # Registrar apertura de caja
@@ -1430,7 +1448,7 @@ class SistemaElectrodomesticos:
             cursor.execute("INSERT INTO caja (fecha_apertura, monto_inicial, estado) VALUES (?, ?, ?)",
                           (fecha, monto, "abierta"))
             
-            self.conn.commit()
+            self.db_session.commit()
             
             # Actualizar estado
             self.caja_abierta = True
@@ -1448,7 +1466,7 @@ class SistemaElectrodomesticos:
             self.log_evento(f"Caja abierta - Monto inicial: ${monto:.2f}")
             
         except Exception as e:
-            self.conn.rollback()
+            self.db_session.rollback()
             messagebox.showerror("Error", f"Error al abrir caja: {str(e)}")
             self.log_evento(f"Error al abrir caja: {str(e)}")
     
@@ -1457,7 +1475,7 @@ class SistemaElectrodomesticos:
             messagebox.showinfo("Información", "La caja ya está cerrada")
             return
         
-        cursor = self.conn.cursor()
+        cursor = self.db_session.cursor()
         
         try:
             # Calcular monto final
@@ -1468,7 +1486,7 @@ class SistemaElectrodomesticos:
             cursor.execute("UPDATE caja SET fecha_cierre = ?, monto_final = ?, estado = 'cerrada' WHERE estado = 'abierta'",
                           (fecha, monto_final))
             
-            self.conn.commit()
+            self.db_session.commit()
             
             # Mostrar resumen
             resumen = f"Resumen de caja:\n\n" \
@@ -1488,7 +1506,7 @@ class SistemaElectrodomesticos:
                 self.log_evento(f"Caja cerrada - Monto final: ${monto_final:.2f}")
             
         except Exception as e:
-            self.conn.rollback()
+            self.db_session.rollback()
             messagebox.showerror("Error", f"Error al cerrar caja: {str(e)}")
             self.log_evento(f"Error al cerrar caja: {str(e)}")
     
@@ -1511,7 +1529,7 @@ class SistemaElectrodomesticos:
             return
         
         # Cargar ventas de hoy
-        cursor = self.conn.cursor()
+        cursor = self.db_session.cursor()
         hoy = datetime.now().strftime("%Y-%m-%d")
         cursor.execute("SELECT id, fecha, total, metodo_pago FROM ventas WHERE fecha LIKE ? AND estado_caja = 'abierta' ORDER BY fecha", (hoy + '%',))
         ventas = cursor.fetchall()
@@ -1578,19 +1596,17 @@ class SistemaElectrodomesticos:
             if not all([nombre_var.get(), precio_var.get(), stock_var.get(), categoria_var.get(), serie_var.get()]):
                 messagebox.showerror("Error", "Todos los campos son obligatorios")
                 return
-            cursor = self.conn.cursor()
+            cursor = self.db_session.cursor()
             try:
                 cursor.execute(
                     "INSERT INTO productos (codigo_barras, nombre, precio, stock, categoria, numero_serie) VALUES (?, ?, ?, ?, ?, ?)",
                     (codigo_var.get(), nombre_var.get(), precio_var.get(), stock_var.get(), categoria_var.get(), serie_var.get())
                 )
-                self.conn.commit()
+                self.db_session.commit()
                 messagebox.showinfo("Éxito", "Producto agregado correctamente")
                 dialog.destroy()
                 self.load_products()
                 self.log_evento(f"Producto agregado: {nombre_var.get()}")
-            except sqlite3.IntegrityError:
-                messagebox.showerror("Error", "El código de barras o número de serie ya existe")
             except Exception as e:
                 messagebox.showerror("Error", f"Error al agregar producto: {str(e)}")
         
@@ -1616,7 +1632,7 @@ class SistemaElectrodomesticos:
         dialog.resizable(False, False)
         
         # Obtener datos actuales del producto
-        cursor = self.conn.cursor()
+        cursor = self.db_session.cursor()
         cursor.execute("SELECT codigo_barras, nombre, precio, stock, categoria, numero_serie FROM productos WHERE id = ?", (product_id,))
         producto = cursor.fetchone()
         
@@ -1655,13 +1671,13 @@ class SistemaElectrodomesticos:
                 messagebox.showerror("Error", "Todos los campos son obligatorios")
                 return
             
-            cursor = self.conn.cursor()
+            cursor = self.db_session.cursor()
             try:
                 cursor.execute(
                     "UPDATE productos SET nombre = ?, precio = ?, stock = ?, categoria = ?, numero_serie = ? WHERE id = ?",
                     (nombre_var.get(), precio_var.get(), stock_var.get(), categoria_var.get(), serie_var.get(), product_id)
                 )
-                self.conn.commit()
+                self.db_session.commit()
                 messagebox.showinfo("Éxito", "Producto actualizado correctamente")
                 dialog.destroy()
                 self.load_products()
@@ -1691,10 +1707,10 @@ class SistemaElectrodomesticos:
         if not confirmacion:
             return
         
-        cursor = self.conn.cursor()
+        cursor = self.db_session.cursor()
         try:
             cursor.execute("DELETE FROM productos WHERE id = ?", (product_id,))
-            self.conn.commit()
+            self.db_session.commit()
             messagebox.showinfo("Éxito", "Producto eliminado correctamente")
             self.load_products()
             
@@ -1702,7 +1718,7 @@ class SistemaElectrodomesticos:
             self.log_evento(f"Producto eliminado: {nombre}")
             
         except Exception as e:
-            self.conn.rollback()
+            self.db_session.rollback()
             messagebox.showerror("Error", f"Error al eliminar producto: {str(e)}")
             self.log_evento(f"Error al eliminar producto: {str(e)}")
     
@@ -1712,7 +1728,7 @@ class SistemaElectrodomesticos:
             messagebox.showwarning("Advertencia", "Por favor ingrese un ID de venta")
             return
         
-        cursor = self.conn.cursor()
+        cursor = self.db_session.cursor()
         cursor.execute("SELECT id, fecha, total FROM ventas WHERE id = ?", (venta_id,))
         venta = cursor.fetchone()
         
@@ -1735,7 +1751,7 @@ class SistemaElectrodomesticos:
             messagebox.showwarning("Advertencia", "Por favor ingrese un número de serie")
             return
         
-        cursor = self.conn.cursor()
+        cursor = self.db_session.cursor()
         cursor.execute('''
             SELECT v.id, v.fecha, v.total
             FROM ventas v
@@ -1763,7 +1779,7 @@ class SistemaElectrodomesticos:
         for item in self.devolucion_tree.get_children():
             self.devolucion_tree.delete(item)
         
-        cursor = self.conn.cursor()
+        cursor = self.db_session.cursor()
         cursor.execute('''
             SELECT p.nombre, dv.cantidad, dv.precio, dv.numero_serie, p.id
             FROM detalle_venta dv
@@ -1834,7 +1850,7 @@ class SistemaElectrodomesticos:
                 return
         
         # Procesar devolución
-        cursor = self.conn.cursor()
+        cursor = self.db_session.cursor()
         try:
             # Registrar la devolución
             fecha = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -1858,7 +1874,7 @@ class SistemaElectrodomesticos:
             self.kafka.publicar('inventario', evento_devolucion)
             self.kafka.publicar('contabilidad', evento_devolucion)
             
-            self.conn.commit()
+            self.db_session.commit()
             messagebox.showinfo("Éxito", "Devolución procesada correctamente")
             
             # Limpiar formulario
@@ -1868,7 +1884,7 @@ class SistemaElectrodomesticos:
             self.log_evento(f"Devolución procesada - Venta ID: {self.venta_devolucion['id']}, Producto: {self.producto_devolucion_seleccionado['nombre']}")
             
         except Exception as e:
-            self.conn.rollback()
+            self.db_session.rollback()
             messagebox.showerror("Error", f"Error al procesar devolución: {str(e)}")
             self.log_evento(f"Error en devolución: {str(e)}")
     
@@ -1890,7 +1906,7 @@ class SistemaElectrodomesticos:
         resultado = [False]  # Usamos una lista para simular pass-by-reference
         
         def verificar():
-            cursor = self.conn.cursor()
+            cursor = self.db_session.cursor()
             password_hash = hashlib.sha256(password_var.get().encode()).hexdigest()
             cursor.execute("SELECT * FROM usuarios WHERE username = ? AND password = ? AND rol = 'gerente'",
                            (usuario_var.get(), password_hash))
@@ -1938,7 +1954,7 @@ class SistemaElectrodomesticos:
         for item in self.reporte_tree.get_children():
             self.reporte_tree.delete(item)
         
-        cursor = self.conn.cursor()
+        cursor = self.db_session.cursor()
         
         # Obtener ventas en el período
         cursor.execute('''
