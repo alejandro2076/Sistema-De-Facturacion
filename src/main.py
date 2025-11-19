@@ -355,12 +355,7 @@ class SistemaElectrodomesticos:
             
     def create_main_content(self):
         self.main_content = ttk.Frame(self.content_container)
-        try:
-            # Ubicar main_content en la columna 1 (la columna 0 es el sidebar)
-            self.main_content.grid(row=0, column=1, sticky=(tk.N, tk.E, tk.S, tk.W))
-        except Exception:
-            # Fallback a pack si grid no funciona
-            self.main_content.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.main_content.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
         # Frame para el contenido dinámico
         self.content_frame = ttk.Frame(self.main_content)
@@ -664,26 +659,34 @@ class SistemaElectrodomesticos:
         ttk.Button(search_frame, text="Buscar", command=self.buscar_por_nombre, 
                   bootstyle="info-outline").grid(row=1, column=2, padx=(10, 0))
         
+        # AUTOCOMPLETADO DE PRODUCTOS
+        self.productos_autocomplete_var = tk.StringVar()
+        self.productos_autocomplete = ttk.Combobox(search_frame, textvariable=self.productos_autocomplete_var, width=40)
+        self.productos_autocomplete.grid(row=2, column=1, columnspan=2, sticky=(tk.W, tk.E), pady=5, padx=(5, 0))
+        self.productos_autocomplete.bind('<KeyRelease>', self.actualizar_autocompletado_productos)
+        self.productos_autocomplete.bind('<<ComboboxSelected>>', self.seleccionar_producto_autocompletado)
+        ttk.Label(search_frame, text="Buscar producto (nombre, categoría, código):", bootstyle="info").grid(row=2, column=0, sticky=tk.W, pady=5)
+
         # Info del producto encontrado
         self.producto_info_var = tk.StringVar(value="Producto: ---\nPrecio: ---\nStock: ---")
         ttk.Label(search_frame, textvariable=self.producto_info_var, justify=tk.LEFT, 
-                 bootstyle="info").grid(row=2, column=0, columnspan=3, sticky=tk.W, pady=10)
+                 bootstyle="info").grid(row=3, column=0, columnspan=3, sticky=tk.W, pady=10)
         
         # Cantidad a agregar
-        ttk.Label(search_frame, text="Cantidad:", bootstyle="info").grid(row=3, column=0, sticky=tk.W, pady=5)
+        ttk.Label(search_frame, text="Cantidad:", bootstyle="info").grid(row=4, column=0, sticky=tk.W, pady=5)
         self.cantidad_venta_var = tk.IntVar(value=1)
         ttk.Spinbox(search_frame, from_=1, to=100, textvariable=self.cantidad_venta_var, 
-                   width=10, bootstyle="info").grid(row=3, column=1, sticky=tk.W, pady=5, padx=(5, 0))
+                   width=10, bootstyle="info").grid(row=4, column=1, sticky=tk.W, pady=5, padx=(5, 0))
         
         ttk.Button(search_frame, text="Agregar al Carrito", command=self.agregar_al_carrito, 
-                  bootstyle="success").grid(row=3, column=2, padx=(10, 0))
+                  bootstyle="success").grid(row=4, column=2, padx=(10, 0))
         
         # Método de pago
-        ttk.Label(search_frame, text="Método de pago:", bootstyle="info").grid(row=4, column=0, sticky=tk.W, pady=5)
+        ttk.Label(search_frame, text="Método de pago:", bootstyle="info").grid(row=5, column=0, sticky=tk.W, pady=5)
         self.metodo_pago_var = tk.StringVar(value="Efectivo")
         metodos = ["Efectivo", "Tarjeta Débito", "Tarjeta Crédito", "Transferencia"]
         ttk.Combobox(search_frame, textvariable=self.metodo_pago_var, values=metodos, 
-                    state="readonly", width=15, bootstyle="info").grid(row=4, column=1, sticky=tk.W, pady=5, padx=(5, 0))
+                    state="readonly", width=15, bootstyle="info").grid(row=5, column=1, sticky=tk.W, pady=5, padx=(5, 0))
         
         # Carrito de compras
         cart_frame = ttk.Labelframe(self.content_frame, text="Carrito de Compra",
@@ -1246,27 +1249,65 @@ class SistemaElectrodomesticos:
         self.producto_info_var.set("Producto: ---\nPrecio: ---\nStock: ---")
         self.cantidad_venta_var.set(1)
     
+    def actualizar_autocompletado_productos(self, event=None):
+        texto = self.productos_autocomplete_var.get().lower()
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT nombre, categoria, codigo_barras, stock, precio FROM productos WHERE nombre LIKE ? OR categoria LIKE ? OR codigo_barras LIKE ?", (f"%{texto}%", f"%{texto}%", f"%{texto}%"))
+        resultados = cursor.fetchall()
+        opciones = [f"{r[0]} | {r[1]} | {r[2]} | Stock: {r[3]} | ${r[4]:.2f}" for r in resultados]
+        self.productos_autocomplete['values'] = opciones
+
+    def seleccionar_producto_autocompletado(self, event=None):
+        seleccion = self.productos_autocomplete_var.get()
+        if not seleccion:
+            return
+        partes = seleccion.split('|')
+        if len(partes) < 3:
+            return
+        nombre = partes[0].strip()
+        categoria = partes[1].strip()
+        codigo = partes[2].strip()
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT id, nombre, precio, stock, categoria, codigo_barras FROM productos WHERE nombre=? AND categoria=? AND codigo_barras=?", (nombre, categoria, codigo))
+        producto = cursor.fetchone()
+        if producto:
+            self.current_product = {
+                'id': producto[0],
+                'nombre': producto[1],
+                'precio': producto[2],
+                'stock': producto[3],
+                'categoria': producto[4],
+                'codigo_barras': producto[5]
+            }
+            self.producto_info_var.set(f"Producto: {producto[1]}\nPrecio: ${producto[2]:.2f}\nStock: {producto[3]}")
+            self.cantidad_venta_var.set(1)
+        else:
+            self.producto_info_var.set("Producto: ---\nPrecio: ---\nStock: ---")
+            self.current_product = None
+
     def actualizar_carrito(self):
         # Limpiar treeview del carrito
         for item in self.cart_tree.get_children():
             self.cart_tree.delete(item)
-        
-        # Calcular total
         total = 0
-        
-        # Agregar items al carrito
         for item in self.carrito:
             subtotal = item['precio'] * item['cantidad']
             total += subtotal
-            self.cart_tree.insert("", tk.END, values=(
-                item['nombre'],
-                item['cantidad'],
-                f"${item['precio']:.2f}",
-                f"${subtotal:.2f}"
-            ))
-        
-        # Actualizar total
-        self.total_var.set(f"Total: ${total:.2f}")
+            self.cart_tree.insert("", tk.END, values=(item['nombre'], item['cantidad'], f"${item['precio']:.2f}", f"${subtotal:.2f}"))
+        # Botón para eliminar producto del carrito
+        if not hasattr(self, 'btn_eliminar_carrito'):
+            self.btn_eliminar_carrito = ttk.Button(self.content_frame, text="Eliminar Producto del Carrito", command=self.eliminar_producto_carrito, bootstyle="danger")
+            self.btn_eliminar_carrito.grid(row=2, column=1, sticky=tk.E, pady=5)
+
+    def eliminar_producto_carrito(self):
+        selected = self.cart_tree.focus()
+        if not selected:
+            messagebox.showwarning("Advertencia", "Seleccione un producto en el carrito para eliminar")
+            return
+        values = self.cart_tree.item(selected, 'values')
+        nombre = values[0]
+        self.carrito = [item for item in self.carrito if item['nombre'] != nombre]
+        self.actualizar_carrito()
     
     @manejar_errores
     def realizar_venta(self):
@@ -1288,12 +1329,19 @@ class SistemaElectrodomesticos:
         try:
             # Calcular total de la venta
             total_venta = sum(item['precio'] * item['cantidad'] for item in self.carrito)
-            
+            metodo_pago = self.metodo_pago_var.get()
+            igtf = 0
+            iva = 0
+            if metodo_pago == "Efectivo":
+                igtf = total_venta * 0.03
+            else:
+                iva = total_venta * 0.16
+            total_final = total_venta + igtf + iva
+
             # Registrar venta
             fecha = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            metodo_pago = self.metodo_pago_var.get()
             cursor.execute("INSERT INTO ventas (fecha, total, estado_caja, metodo_pago) VALUES (?, ?, ?, ?)", 
-                          (fecha, total_venta, "abierta", metodo_pago))
+                          (fecha, total_final, "abierta", metodo_pago))
             venta_id = cursor.lastrowid
             
             # Registrar detalles de venta
@@ -1328,25 +1376,41 @@ class SistemaElectrodomesticos:
             self.conn.commit()
             
             # Mostrar mensaje de éxito
-            messagebox.showinfo("Venta Realizada", f"Venta realizada con éxito. Total: ${total_venta:.2f}")
-            
-            # Limpiar carrito
-            self.carrito = []
-            self.actualizar_carrito()
-            
-            # Actualizar productos
-            self.load_products()
-            
-            # Actualizar ventas del día
-            self.cargar_ventas_hoy()
-            
-            # Registrar en log
-            self.log_evento(f"Venta realizada - ID: {venta_id}, Total: ${total_venta:.2f}")
+            messagebox.showinfo("Venta Realizada", f"Venta realizada con éxito. Total: ${total_final:.2f}\nIGTF: ${igtf:.2f}\nIVA: ${iva:.2f}")
+            # Generar factura PDF
+            self.generar_factura_pdf(venta_id, fecha, metodo_pago, total_venta, igtf, iva, total_final)
             
         except Exception as e:
             self.conn.rollback()
             messagebox.showerror("Error", f"Ocurrió un error al procesar la venta: {str(e)}")
             self.log_evento(f"Error en venta: {str(e)}")
+    
+    def generar_factura_pdf(self, venta_id, fecha, metodo_pago, total_venta, igtf, iva, total_final):
+        from reportlab.lib.pagesizes import letter
+        from reportlab.pdfgen import canvas
+        import os
+        filename = f"factura_{venta_id}.pdf"
+        filepath = os.path.join(os.getcwd(), filename)
+        c = canvas.Canvas(filepath, pagesize=letter)
+        c.setFont("Helvetica", 12)
+        c.drawString(50, 750, f"ElectroStore - Factura #{venta_id}")
+        c.drawString(50, 730, f"Fecha: {fecha}")
+        c.drawString(50, 710, f"Método de pago: {metodo_pago}")
+        c.drawString(50, 690, f"----------------------------------------")
+        y = 670
+        c.drawString(50, y, "Producto        Cantidad    Precio    Subtotal")
+        y -= 20
+        for item in self.carrito:
+            subtotal = item['precio'] * item['cantidad']
+            c.drawString(50, y, f"{item['nombre'][:15]:15} {item['cantidad']:8} ${item['precio']:.2f}   ${subtotal:.2f}")
+            y -= 20
+        c.drawString(50, y-10, f"----------------------------------------")
+        c.drawString(50, y-30, f"Total: ${total_venta:.2f}")
+        c.drawString(50, y-50, f"IGTF: ${igtf:.2f}")
+        c.drawString(50, y-70, f"IVA: ${iva:.2f}")
+        c.drawString(50, y-90, f"Total Final: ${total_final:.2f}")
+        c.save()
+        messagebox.showinfo("Factura Generada", f"Factura PDF generada: {filename}")
     
     def abrir_caja(self):
         if self.caja_abierta:
@@ -1940,7 +2004,7 @@ class SistemaElectrodomesticos:
     
     def log_evento(self, mensaje):
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        if self.log_text:
+        if hasattr(self, "log_text") and self.log_text:
             self.log_text.config(state=tk.NORMAL)
             self.log_text.insert(tk.END, f"[{timestamp}] {mensaje}\n")
             self.log_text.config(state=tk.DISABLED)

@@ -1,361 +1,205 @@
 # ElectroStore ERP/POS
 
-Sistema ERP/POS robusto para ElectroStore, desarrollado en Python con FastAPI. Incluye backend seguro, validaciones automáticas, API REST, logging avanzado y pruebas de integración.
+Sistema integral de gestión y facturación para comercios, desarrollado en Python. Permite administrar inventario, ventas, usuarios y emitir facturas digitales, con arquitectura modular y escalable.
 
-## Características principales
-- API REST con FastAPI
-- Autenticación JWT y gestión segura de contraseñas (bcrypt)
-- Validaciones automáticas con Pydantic
-- Logging avanzado y auditoría
-- Pruebas unitarias y de integración
-- Base de datos SQLite configurable por variable de entorno
-- Documentación automática OpenAPI/Swagger
+---
 
-## Documentación de la API
-- Swagger UI: [http://localhost:8000/docs](http://localhost:8000/docs)
-- Redoc: [http://localhost:8000/redoc](http://localhost:8000/redoc)
+## Descripción General
+ElectroStore ERP/POS es una solución completa para la gestión de comercios, adaptable a cualquier tipo de producto. Incluye:
+- Backend API REST con FastAPI
+- Interfaz gráfica moderna con Tkinter/ttkbootstrap
+- Base de datos PostgreSQL (soporte legacy para SQLite)
+- Control de usuarios y roles
+- Auditoría y logging avanzado
+- Pruebas automatizadas
+- Generación de facturas digitales (PDF)
+- Preparado para integración con impresoras fiscales
+- Despliegue con Docker y ejecutable standalone
 
-## Instalación y uso
+---
 
-### Instalar dependencias
-```bash
-pip install -r requirements.txt
-pip install -r requirements-additional.txt
+## Estructura del Proyecto
+```
+├── src/
+│   ├── main.py                # Lógica principal y GUI
+│   ├── api.py                 # Endpoints FastAPI
+│   ├── logging_config.py      # Configuración de logs
+│   ├── alembic/               # Migraciones DB
+│   ├── Dockerfile, docker-compose.yml
+│   └── ...
+├── requirements/
+│   ├── requirements.txt
+│   └── requirements-additional.txt
+├── scripts/
+│   ├── crear_usuarios_iniciales.py
+│   ├── migrar_sqlite_a_postgres.py
+│   ├── validate_system.py
+│   └── verificar_usuarios.py
+├── tests/
+│   ├── test_api_critical.py
+│   ├── test_backend.py
+│   ├── test_gui_critical.py
+│   └── test_integration.py
+├── dist/                      # Ejecutable generado
+├── logs/                      # Archivos de auditoría
+├── README.md
 ```
 
-### Ejecutar la API
-```bash
-uvicorn api:app --reload
+---
+
+## Instalación y Configuración
+
+### 1. Instalar dependencias
+```powershell
+pip install -r requirements/requirements.txt
+pip install -r requirements/requirements-additional.txt
 ```
 
-### Ejecutar pruebas
-```bash
+### 2. Configurar base de datos
+- Por defecto usa PostgreSQL. Edita la cadena de conexión en `src/main.py` si es necesario.
+- Para migrar desde SQLite, ejecuta:
+  ```powershell
+  python scripts/migrar_sqlite_a_postgres.py
+  ```
+
+### 3. Crear usuarios iniciales
+```powershell
+python scripts/crear_usuarios_iniciales.py
+```
+Usuarios iniciales: superadmin, gerente, cajero, devteam, almacen (roles y contraseñas seguras).
+
+### 4. Ejecutar el sistema
+- **API:**
+  ```powershell
+  uvicorn src/api:app --reload
+  ```
+- **GUI:**
+  ```powershell
+  python src/main.py
+  ```
+- **Ejecutable:**
+  ```powershell
+  pyinstaller --onefile --windowed src/main.py
+  # Ejecuta dist/main.exe
+  ```
+- **Docker:**
+  ```powershell
+  docker-compose up --build
+  ```
+
+### 5. Pruebas automatizadas y validación
+```powershell
 pytest tests/
+python scripts/validate_system.py
 ```
 
-### Ejecutar con Docker
-```bash
-docker-compose up --build
-```
+---
 
-## Estructura de carpetas
-- `api.py`: API principal y endpoints
-- `main.py`: Lógica de negocio y modelos
-- `logging_config.py`: Configuración de logs y auditoría
-- `test_backend.py`: Pruebas unitarias de modelos
-- `test_integration.py`: Pruebas de integración
-- `requirements.txt`: Dependencias
+## Funcionalidades Detalladas
 
-## Variables de entorno
-- `ELECTROSTORE_DB`: Permite definir la base de datos a usar (por defecto `electrostore.db`).
+### Inventario y Productos
+- Registro, edición y eliminación de productos.
+- Búsqueda avanzada con autocompletado por nombre, categoría y código de barras.
+- Visualización de stock en tiempo real.
+- Permisos granulares por rol (almacen, gerente, etc).
+- Actualización automática de stock tras ventas y devoluciones.
 
-## Ejemplos de uso
+### Punto de Venta
+- Carrito de compras interactivo: agregar, modificar y eliminar productos antes de la venta.
+- Validación de stock disponible.
+- Selección de método de pago (efectivo, tarjeta, transferencia, pago móvil).
+- Cálculo automático de impuestos:
+  - IGTF (3%) para pagos en efectivo.
+  - IVA (16%) para pagos electrónicos.
+- Finalización de venta con registro en la base de datos y actualización de inventario.
 
-### Crear un producto (requiere token de admin/gerente)
+### Facturación Digital
+- Generación automática de factura en PDF al finalizar la venta.
+- Factura incluye: datos de empresa, fecha, productos vendidos, cantidades, precios, impuestos y total.
+- Archivos PDF listos para impresión o envío digital.
+- Preparado para integración con impresoras fiscales (futuro).
+
+### Gestión de Usuarios y Roles
+- Creación y administración de usuarios con roles: superadmin, gerente, cajero, devteam, almacen.
+- Permisos diferenciados para cada rol.
+- Seguridad avanzada: contraseñas cifradas, autenticación JWT.
+
+### Auditoría y Logging
+- Registro de eventos críticos y errores en archivos de log.
+- Auditoría de acciones de usuarios y cambios en inventario.
+- Logs accesibles para revisión y cumplimiento.
+
+### Pruebas y Validación
+- Pruebas unitarias y de integración para API y GUI.
+- Scripts de validación de sistema y usuarios.
+- Cobertura de casos críticos: inventario, ventas, permisos, endpoints.
+
+### Despliegue y Mantenimiento
+- Docker y docker-compose para despliegue rápido y reproducible.
+- PyInstaller para generación de ejecutable standalone.
+- Scripts para migración de base de datos y limpieza de archivos legacy.
+- Comandos PowerShell para depuración y mantenimiento.
+
+---
+
+## API REST y Endpoints
+- Documentación automática con Swagger UI y Redoc:
+  - [http://localhost:8000/docs](http://localhost:8000/docs)
+  - [http://localhost:8000/redoc](http://localhost:8000/redoc)
+- Endpoints para gestión de productos, ventas, usuarios, reportes y auditoría.
+- Ejemplo de uso (adaptable a cualquier producto):
 ```bash
 curl -X POST "http://localhost:8000/productos" \
   -H "Authorization: Bearer <TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{
-    "codigo_barras": "1234567890123",
-    "nombre": "Televisor",
-    "precio": 100.0,
-    "stock": 10,
-    "categoria": "Electrónica",
-    "numero_serie": "SN-12345678"
+    "codigo_barras": "<código>",
+    "nombre": "<nombre>",
+    "precio": <precio>,
+    "stock": <stock>,
+    "categoria": "<categoría>",
+    "numero_serie": "<serie>"
   }'
 ```
 
-### Registrar usuario
-```bash
-curl -X POST "http://localhost:8000/register" \
-  -H "Content-Type: application/json" \
-  -d '{"username": "usuario1", "password": "clave123"}'
-```
-
-### Login y obtener token
-```bash
-curl -X POST "http://localhost:8000/login" \
-  -H "Content-Type: application/json" \
-  -d '{"username": "usuario1", "password": "clave123"}'
-```
-
-## Cómo ejecutar pruebas unitarias y de integración
-
-### Pruebas unitarias (modelos)
-```bash
-pytest test_backend.py -v
-```
-
-### Pruebas de integración (API completa)
-```bash
-pytest test_integration.py -v
-```
-
-### Ejecutar todas las pruebas
-```bash
-pytest -v
-```
-
-## Levantar el entorno con Docker
-
-1. Construye y ejecuta el servicio:
-   ```bash
-   docker-compose up --build
-   ```
-2. Accede a la API en [http://localhost:8000/docs](http://localhost:8000/docs) para probar y consultar la documentación interactiva.
-
-## Configuración para PostgreSQL (producción)
-
-Para usar PostgreSQL en vez de SQLite:
-1. Edita `DATABASE_URL` en `.env` o en `docker-compose.yml`:
-   ```
-   DATABASE_URL=postgresql://electrostore:electrostorepass@db:5432/electrostore
-   ```
-2. Levanta el entorno con Docker Compose:
-   ```bash
-   docker-compose up --build
-   ```
-3. Ejecuta migraciones Alembic:
-   ```bash
-   alembic upgrade head
-   ```
-
-## ALERTAS Y MONITOREO
-Para alertas avanzadas, se recomienda integrar Sentry:
-```python
-import sentry_sdk
-sentry_sdk.init(dsn="<TU_DSN_SENTRY>")
-```
-El monitoreo Prometheus ya está disponible en `/metrics`.
-
 ---
-Desarrollado para ElectroStore. Para soporte o mejoras, contacta al equipo de desarrollo.
 
-
-## Nuevas implementaciones
-_______________________________
-```python
-import tkinter as tk
-from tkinter import ttk, messagebox
-import sqlite3
-from datetime import datetime
-import random
-import string
-```
-
-## La Vista Comienza desde:
-
-```python
-class SistemaElectrodomesticos:
-```
-________________________________
-# Vista de Interfaz - Sistema ElectroStore
-
-## 🎨 Diseño General
-**Tema**: Azul profesional con acentos verdes  
-**Layout:** Sistema de pestañas con organización modular  
-**Responsivo:** Adaptable a diferentes tamaños de pantalla
+## Roles y Permisos
+- **superadmin:** Acceso total, configuración y auditoría.
+- **gerente:** Gestión avanzada, reportes y usuarios.
+- **cajero:** Punto de venta y facturación.
+- **devteam:** Desarrollo, mantenimiento y pruebas.
+- **almacen:** Gestión de inventario y productos.
 
 ---
 
-## 📋 Pestaña "Punto de Venta"
-
-### 🔍 Panel de Escaneo y Búsqueda
-```
-[Escaneo de Productos]
-├── Código de Barras: [_______________] [Buscar Producto] (Enter)
-├── Buscar por Nombre: [_______________] [Buscar] (Enter)
-├── 
-└── ℹ️ Producto: ---
-    Precio: ---  
-    Stock: ---
-```
-
-### 🛒 Carrito de Compras
-```
-[Carrito de Compra]
-├── ┌─────────────────────────────────────────────────────┐
-│   │ Producto          │ Cantidad │ Precio Unit │ Subtotal │
-│   ├─────────────────────────────────────────────────────┤
-│   │ Smart TV 55" 4K   │    1     │   $899.99   │  $899.99 │
-│   │ Cafetera Automáti │    2     │   $129.99   │  $259.98 │
-│   └─────────────────────────────────────────────────────┘
-│
-└── Total: $1,159.97     [Realizar Venta]
-```
-
----
-
-## 📊 Pestaña "Gestión de Inventario"
-
-### 📦 Tabla de Productos
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│ ID │ Código Barras   │ Nombre              │ Precio  │ Stock │ Categoría│
-├─────────────────────────────────────────────────────────────────────────┤
-│ 1  │ 7501006554025   │ Smart TV 55" 4K     │ $899.99 │  15   │TV        │
-│ 2  │ 7501055300124   │ Refrigeradora French│ $1599.99│  8    │Refriger. │
-│ 3  │ 7501006554032   │ Lavadora Secadora   │ $749.99 │  12   │Lavadoras │
-└─────────────────────────────────────────────────────────────────────────┘
-```
-
-### 🛠️ Controles de Inventario
-```
-[Agregar Producto] [Editar Producto] [Eliminar Producto] [Actualizar]
-```
-
----
-
-## 💰 Pestaña "Control de Caja"
-
-### 📊 Estado de Caja
-```
-[Estado de Caja]
-├── Estado: ABIERTA ✅
-├── Monto inicial: $500.00
-└── Ventas hoy: $1,159.97
-```
-
-### ⚙️ Controles de Caja
-```
-[Controles de Caja]
-├── Monto inicial: [500.00] [Abrir Caja] [Cerrar Caja]
-└── 
-```
-
-### 📈 Reporte de Ventas
-```
-[Ventas de Hoy]
-┌─────────────────────────────────────┐
-│ ID │ Fecha y Hora      │ Total      │
-├─────────────────────────────────────┤
-│ 15 │ 2024-01-15 10:30 │ $1,159.97  │
-│ 14 │ 2024-01-15 09:45 │ $299.99    │
-└─────────────────────────────────────┘
-```
-
----
-
-## 🎯 Flujos Visuales
-
-### 1. Flujo de Venta
-```
-[Escaneo] → [Verificación] → [Info Producto] → [Selección Cantidad] 
-→ [Agregar Carrito] → [Repetir] → [Revisar Carrito] → [Confirmar Venta]
-```
-
-### 2. Flujo de Gestión
-```
-[Seleccionar Producto] → [Editar/Eliminar] → [Confirmar] → [Actualizar Tabla]
-```
-
-### 3. Flujo de Caja
-```
-[Ingresar Monto] → [Abrir Caja] → [Realizar Ventas] → [Cerrar Caja] 
-→ [Ver Resumen]
-```
-
----
-
-## 🎨 Paleta de Colores
-
-**Primarios:**
-- Fondo: #f0f8ff (Azul claro)
-- Encabezados: #2c3e50 (Azul oscuro)
-- Botones: #3498db (Azul)
-
-**Secundarios:**
-- Éxito: #27ae60 (Verde)
-- Peligro: #e74c3c (Rojo)
-- Advertencia: #f39c12 (Naranja)
-
-**Texto:**
-- Principal: #333333
-- Secundario: #7f8c8d
-
----
-
-## 📱 Responsividad
-
-**Pantallas Grandes (>1200px):** Layout completo 3 columnas  
-**Pantallas Medianas (900-1200px):** Reorganización de elementos  
-**Pantallas Pequeñas (<900px):** Layout una columna, pestañas verticales
-
----
-
-## 🔍 Experiencia de Usuario
-
-**Feedback Visual:**
-- ✅ Éxito: Notificaciones verdes
-- ❌ Error: Mensajes rojos con detalles
-- ⚠️ Advertencia: Alertas amarillas
-- ❓ Confirmación: Diálogos modales
-
-**Navegación:**
-- Tab navigation entre campos
-- Enter para buscar productos
-- Focus indicators visibles
-
----
-
-## 🖥️ Elementos de Interfaz
-
-**Tipografía:**
-- Títulos: Arial 16px bold
-- Texto normal: Segoe UI
-- Totales: Arial 12px bold
-
-**Iconografía:**
-- 📺 Televisores
-- ❄️ Refrigeradoras
-- 🔄 Lavadoras
-- 🔥 Cocina
-- ⚡ Pequeños Electrodomésticos
-- 🧹 Limpieza
-- ❄️🔥 Climatización
-- 🎮 Entretenimiento
-
----
-
-## 🎪 Estados Interactivos
-
-**Botones:** Efecto hover y estados disabled  
-**Campos:** Focus indicators y validación visual  
-**Tablas:** Selección de filas y scroll suave  
-**Notificaciones:** Transiciones de aparición/desaparición
-
-Esta interfaz está optimizada para flujo de trabajo eficiente en tienda de electrodomésticos con navegación intuitiva y feedback visual claro.
-
-## Repositorio
-
-Repositorio oficial: [https://github.com/alejandro2076/Proyecto-ERP](https://github.com/alejandro2076/Proyecto-ERP)
-
-## Paso a paso para subir cambios a GitHub
-
-1. Abre PowerShell en la carpeta del proyecto.
-2. Verifica el estado de los archivos:
-   ```powershell
-   git status
-   ```
-3. Agrega los archivos modificados:
-   ```powershell
-   git add .
-   ```
-4. Haz el commit con un mensaje descriptivo:
-   ```powershell
-   git commit -m "Descripción de los cambios"
-   ```
-5. Sube los cambios a la rama principal (`main`):
-   ```powershell
-   git push origin main
-   ```
-
-Si es la primera vez que subes el proyecto, asegúrate de haber configurado el remoto:
+## Migración, Limpieza y Mantenimiento
+- Migración de datos de SQLite a PostgreSQL con script dedicado.
+- Limpieza automática de archivos legacy, logs vacíos y temporales.
+- Validación de usuarios y datos con scripts.
+- Comandos PowerShell para eliminar archivos innecesarios:
 ```powershell
-git remote add origin https://github.com/alejandro2076/Proyecto-ERP.git
-git push -u origin main
+Remove-Item .\electrostore.db -Force
+Remove-Item .\src\electrostore.db -Force
+Remove-Item .\src\logs -Recurse -Force
+Remove-Item .\src\__pycache__ -Recurse -Force
+Remove-Item .\src\alembic\versions\__pycache__ -Recurse -Force
+Remove-Item .\tests\__pycache__ -Recurse -Force
+Remove-Item .\app.log -Force
+Remove-Item .\src\main.spec -Force
 ```
 
-Puedes ver el repositorio y tus cambios en:
-[https://github.com/alejandro2076/Proyecto-ERP](https://github.com/alejandro2076/Proyecto-ERP)
+---
+
+## Personalización y Extensibilidad
+- El sistema es adaptable a cualquier tipo de producto registrado en la base de datos.
+- Fácil integración de nuevas funcionalidades y módulos.
+- Preparado para conectar con hardware fiscal y otros sistemas externos.
+
+---
+
+## Contacto y Soporte
+Para dudas, soporte o mejoras, abre un issue en GitHub o contacta al equipo de desarrollo.
+
+---
+Este README está optimizado para documentación técnica y visualización en GitHub. Para detalles adicionales, consulta los scripts y archivos fuente incluidos en el proyecto.
