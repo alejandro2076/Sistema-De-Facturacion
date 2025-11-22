@@ -200,6 +200,124 @@ class KafkaSimulator:
                 except Exception as e:
                     print(f"Error procesando evento en {suscriptor.__class__.__name__}: {str(e)}")
 
+class LoginWindow:
+    def __init__(self, root, sistema):
+        self.root = root
+        self.sistema = sistema
+        self.create_login_window()
+        
+    def create_login_window(self):
+        self.login_window = ttk.Toplevel(self.root)
+        self.login_window.title("ElectroStore - Iniciar Sesión")
+        self.login_window.geometry("400x300")
+        self.login_window.resizable(False, False)
+        self.login_window.transient(self.root)
+        self.login_window.grab_set()
+        
+        # Centrar la ventana
+        self.login_window.update_idletasks()
+        x = (self.root.winfo_screenwidth() // 2) - (400 // 2)
+        y = (self.root.winfo_screenheight() // 2) - (300 // 2)
+        self.login_window.geometry(f"400x300+{x}+{y}")
+        
+        # Frame principal
+        main_frame = ttk.Frame(self.login_window, padding=20)
+        main_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # Título
+        ttk.Label(main_frame, text="ElectroStore", 
+                 font=("Arial", 20, "bold"), 
+                 bootstyle="primary").pack(pady=(0, 10))
+        
+        ttk.Label(main_frame, text="Sistema de Gestión", 
+                 font=("Arial", 12), 
+                 bootstyle="secondary").pack(pady=(0, 30))
+        
+        # Campos de login
+        form_frame = ttk.Frame(main_frame)
+        form_frame.pack(fill=tk.X, pady=10)
+        
+        ttk.Label(form_frame, text="Usuario:", 
+                 bootstyle="primary").grid(row=0, column=0, sticky=tk.W, pady=5)
+        self.username_var = tk.StringVar()
+        username_entry = ttk.Entry(form_frame, textvariable=self.username_var, 
+                                  width=25, bootstyle="primary")
+        username_entry.grid(row=0, column=1, sticky=(tk.W, tk.E), pady=5, padx=(10, 0))
+        
+        ttk.Label(form_frame, text="Contraseña:", 
+                 bootstyle="primary").grid(row=1, column=0, sticky=tk.W, pady=5)
+        self.password_var = tk.StringVar()
+        password_entry = ttk.Entry(form_frame, textvariable=self.password_var, 
+                                  show="*", width=25, bootstyle="primary")
+        password_entry.grid(row=1, column=1, sticky=(tk.W, tk.E), pady=5, padx=(10, 0))
+        
+        # Botones
+        btn_frame = ttk.Frame(main_frame)
+        btn_frame.pack(fill=tk.X, pady=20)
+        
+        ttk.Button(btn_frame, text="Iniciar Sesión", 
+                  command=self.login, 
+                  bootstyle="success").pack(side=tk.LEFT, padx=(0, 10))
+        
+        ttk.Button(btn_frame, text="Cancelar", 
+                  command=self.cancelar, 
+                  bootstyle="secondary").pack(side=tk.LEFT)
+        
+        # Info de usuarios de prueba
+        info_frame = ttk.Labelframe(main_frame, text="Usuarios de Prueba", padding=10)
+        info_frame.pack(fill=tk.X, pady=10)
+        
+        info_text = """superadmin / Super@dmin2024!
+gerente / G3r3nt3_2024$
+cajero / C@j3r0_2024!
+almacen / Alm4c3n_2024
+devteam / DevTeam_2024!"""
+        
+        ttk.Label(info_frame, text=info_text, 
+                 font=("Arial", 9), 
+                 bootstyle="info").pack(anchor=tk.W)
+        
+        # Configurar grid
+        form_frame.columnconfigure(1, weight=1)
+        
+        # Bind Enter key
+        username_entry.bind('<Return>', lambda e: password_entry.focus())
+        password_entry.bind('<Return>', lambda e: self.login())
+        
+        username_entry.focus()
+    
+    def login(self):
+        username = self.username_var.get().strip()
+        password = self.password_var.get()
+        
+        if not username or not password:
+            messagebox.showerror("Error", "Por favor ingrese usuario y contraseña")
+            return
+        
+        # Verificar credenciales
+        cursor = self.sistema.db_session.cursor()
+        password_hash = hashlib.sha256(password.encode()).hexdigest()
+        
+        cursor.execute("SELECT username, rol, nombre FROM usuarios WHERE username = ? AND password = ?", 
+                      (username, password_hash))
+        usuario = cursor.fetchone()
+        
+        if usuario:
+            self.sistema.usuario_actual = {
+                'username': usuario[0],
+                'rol': usuario[1],
+                'nombre': usuario[2]
+            }
+            self.sistema.actualizar_interfaz_por_rol()
+            self.login_window.destroy()
+            messagebox.showinfo("Éxito", f"Bienvenido {usuario[2]} ({usuario[1]})")
+        else:
+            messagebox.showerror("Error", "Credenciales incorrectas")
+    
+    def cancelar(self):
+        self.login_window.destroy()
+        self.root.quit()
+
 class SistemaElectrodomesticos:
     def __init__(self, root):
         self.root = root
@@ -221,6 +339,9 @@ class SistemaElectrodomesticos:
         self.monto_inicial = 0.0
         self.ventas_dia = 0.0
         
+        # Usuario actual
+        self.usuario_actual = None
+        
         # Conectar a la base de datos
         self.db_session = SessionLocal()
         self.inventario_service = ServicioInventario(self.db_session)
@@ -235,22 +356,82 @@ class SistemaElectrodomesticos:
         self.kafka.suscribir('contabilidad', self.contabilidad_service)
         self.kafka.suscribir('autorizaciones', self.autorizaciones_service)
         
-        # Crear la nueva interfaz con el diseño de la imagen
+        # Crear usuarios por defecto si no existen
+        self.crear_usuarios_por_defecto()
+        
+        # Mostrar ventana de login primero
+        self.mostrar_login()
+        
+    def mostrar_login(self):
+        self.login_window = LoginWindow(self.root, self)
+        self.root.wait_window(self.login_window.login_window)
+        
+        # Si no se autenticó ningún usuario, cerrar la aplicación
+        if not self.usuario_actual:
+            self.root.destroy()
+            return
+        
+        # Si se autenticó, crear la interfaz principal
         self.create_new_interface()
-        
-        # Cargar productos
         self.load_products()
-        
-        # Actualizar estado de la caja
         self.actualizar_estado_caja()
-        
-        # Iniciar monitoreo de alertas
         self.monitorear_alertas()
-        
-        # Mostrar pantalla inicial por defecto (sin dashboard)
         self.mostrar_home()
         
         self.log_text = None  # Inicializar log_text como None
+        
+    def crear_usuarios_por_defecto(self):
+        cursor = self.db_session.cursor()
+        
+        # Lista de usuarios a crear
+        usuarios = [
+            ('devteam', 'DevTeam_2024!', 'desarrollador', 'Equipo de Desarrollo'),
+            ('superadmin', 'Super@dmin2024!', 'superadmin', 'Super Administrador'),
+            ('gerente', 'G3r3nt3_2024$', 'gerente', 'Gerente General'),
+            ('cajero', 'C@j3r0_2024!', 'cajero', 'Cajero Principal'),
+            ('almacen', 'Alm4c3n_2024', 'almacen', 'Responsable de Almacén')
+        ]
+        
+        for username, password, rol, nombre in usuarios:
+            cursor.execute("SELECT COUNT(*) FROM usuarios WHERE username = ?", (username,))
+            if cursor.fetchone()[0] == 0:
+                password_hash = hashlib.sha256(password.encode()).hexdigest()
+                cursor.execute("INSERT INTO usuarios (username, password, rol, nombre) VALUES (?, ?, ?, ?)",
+                              (username, password_hash, rol, nombre))
+        
+        self.db_session.commit()
+    
+    def actualizar_interfaz_por_rol(self):
+        """Actualizar la interfaz según los permisos del rol del usuario"""
+        if not hasattr(self, 'nav_buttons'):
+            return
+            
+        rol = self.usuario_actual['rol']
+        
+        # Ocultar todos los botones primero
+        for btn in self.nav_buttons.values():
+            btn.pack_forget()
+        
+        # Mostrar botones según el rol
+        if rol in ['superadmin', 'gerente']:
+            # Acceso completo
+            for btn in self.nav_buttons.values():
+                btn.pack(fill=tk.X, pady=6)
+        elif rol == 'cajero':
+            # Solo ventas y caja
+            self.nav_buttons["ventas"].pack(fill=tk.X, pady=6)
+            self.nav_buttons["caja"].pack(fill=tk.X, pady=6)
+        elif rol == 'almacen':
+            # Solo inventario
+            self.nav_buttons["inventario"].pack(fill=tk.X, pady=6)
+        elif rol == 'desarrollador':
+            # Acceso completo
+            for btn in self.nav_buttons.values():
+                btn.pack(fill=tk.X, pady=6)
+        
+        # Actualizar header con información del usuario
+        if hasattr(self, 'user_label'):
+            self.user_label.config(text=f"👤 {self.usuario_actual['nombre']} ({self.usuario_actual['rol']})")
         
     def create_new_interface(self):
         # Crear contenedor principal
@@ -282,19 +463,24 @@ class SistemaElectrodomesticos:
         # Navegación
         nav_frame = ttk.Frame(self.sidebar_frame)
         nav_frame.pack(fill=tk.X, padx=5)
-        nav_buttons = [
-            ("📅 Calendario", self.mostrar_calendario),
-            ("💰 Punto de Venta", self.mostrar_ventas),
-            ("📦 Inventario", self.mostrar_inventario),
-            ("💵 Control de Caja", self.mostrar_caja),
-            ("🔄 Devoluciones", self.mostrar_devoluciones),
-            ("📈 Reportes", self.mostrar_reportes),
-            ("⚙️ Microservicios", self.mostrar_microservicios)
+        
+        # Diccionario para almacenar referencias a los botones de navegación
+        self.nav_buttons = {}
+        
+        nav_options = [
+            ("📅 Calendario", self.mostrar_calendario, "calendario"),
+            ("💰 Punto de Venta", self.mostrar_ventas, "ventas"),
+            ("📦 Inventario", self.mostrar_inventario, "inventario"),
+            ("💵 Control de Caja", self.mostrar_caja, "caja"),
+            ("🔄 Devoluciones", self.mostrar_devoluciones, "devoluciones"),
+            ("📈 Reportes", self.mostrar_reportes, "reportes"),
+            ("⚙️ Microservicios", self.mostrar_microservicios, "microservicios")
         ]
-        for text, command in nav_buttons:
+
+        for text, command, key in nav_options:
             btn = ttk.Button(nav_frame, text=text, command=command,
                               bootstyle="primary", width=20)
-            btn.pack(fill=tk.X, pady=6)
+            self.nav_buttons[key] = btn
 
         # CONTENIDO PRINCIPAL (solo grid)
         self.main_content = ttk.Frame(self.content_container)
@@ -308,6 +494,9 @@ class SistemaElectrodomesticos:
 
         # Inicializar carrito
         self.carrito = []
+        
+        # Actualizar interfaz según el rol
+        self.actualizar_interfaz_por_rol()
         
     def create_header(self):
         header_frame = ttk.Frame(self.main_container, bootstyle="dark")
@@ -325,12 +514,29 @@ class SistemaElectrodomesticos:
         right_header = ttk.Frame(header_frame)
         right_header.pack(side=tk.RIGHT)
 
+        # Botón para cerrar sesión
+        logout_btn = ttk.Button(right_header, text="Cerrar Sesión", 
+                               command=self.cerrar_sesion, bootstyle="danger-outline")
+        logout_btn.pack(side=tk.RIGHT, padx=(0, 8))
+
         # Botón para toggle del sidebar (útil en pantallas pequeñas)
         toggle_btn = ttk.Button(right_header, text="☰", command=self.toggle_sidebar, bootstyle="secondary")
         toggle_btn.pack(side=tk.RIGHT, padx=(0, 8))
 
-        ttk.Label(right_header, text="👤 Admin", 
-                 font=("Arial", 10), bootstyle="secondary").pack(side=tk.RIGHT)
+        # Etiqueta del usuario
+        user_text = f"👤 {self.usuario_actual['nombre']} ({self.usuario_actual['rol']})" if self.usuario_actual else "👤 No autenticado"
+        self.user_label = ttk.Label(right_header, text=user_text, 
+                                   font=("Arial", 10), bootstyle="secondary")
+        self.user_label.pack(side=tk.RIGHT, padx=(0, 8))
+        
+    def cerrar_sesion(self):
+        confirmacion = messagebox.askyesno("Cerrar Sesión", "¿Está seguro de que desea cerrar sesión?")
+        if confirmacion:
+            self.usuario_actual = None
+            # Limpiar la interfaz actual
+            self.main_container.destroy()
+            # Mostrar ventana de login nuevamente
+            self.mostrar_login()
         
     def create_sidebar(self):
         # Hacemos que el sidebar sea accesible como atributo para poder mostrar/ocultar
@@ -417,8 +623,18 @@ class SistemaElectrodomesticos:
 
         subtitle = ttk.Frame(self.content_frame)
         subtitle.pack(fill=tk.X)
-        ttk.Label(subtitle, text="Bienvenido. Use el menú izquierdo para navegar: Punto de Venta, Inventario, Caja, Devoluciones, Reportes y Microservicios.",
+        welcome_text = f"Bienvenido {self.usuario_actual['nombre']}. Use el menú izquierdo para navegar."
+        ttk.Label(subtitle, text=welcome_text,
                  font=("Arial", 11), bootstyle="secondary", wraplength=900, justify=tk.LEFT).pack(anchor=tk.W, pady=(0,10))
+        
+        # Información del usuario
+        user_info_frame = ttk.Labelframe(self.content_frame, text="Información de Usuario", padding=10, bootstyle="info")
+        user_info_frame.pack(fill=tk.X, pady=(0,10))
+        
+        ttk.Label(user_info_frame, text=f"Nombre: {self.usuario_actual['nombre']}", bootstyle="info").pack(anchor=tk.W)
+        ttk.Label(user_info_frame, text=f"Usuario: {self.usuario_actual['username']}", bootstyle="info").pack(anchor=tk.W)
+        ttk.Label(user_info_frame, text=f"Rol: {self.usuario_actual['rol']}", bootstyle="info").pack(anchor=tk.W)
+        
         # Espacio para KPIs resumidos
         kpi_frame = ttk.Labelframe(self.content_frame, text="Resumen rápido", padding=10, bootstyle="primary")
         kpi_frame.pack(fill=tk.BOTH, expand=True)
@@ -439,26 +655,50 @@ class SistemaElectrodomesticos:
                  font=("Arial", 16)).pack(pady=50)
         
     def mostrar_ventas(self):
+        # Verificar permisos
+        if self.usuario_actual['rol'] not in ['superadmin', 'gerente', 'cajero', 'desarrollador']:
+            messagebox.showerror("Acceso Denegado", "No tiene permisos para acceder al módulo de ventas")
+            return
         self.limpiar_contenido()
         self.create_ventas_widgets()
         
     def mostrar_inventario(self):
+        # Verificar permisos
+        if self.usuario_actual['rol'] not in ['superadmin', 'gerente', 'almacen', 'desarrollador']:
+            messagebox.showerror("Acceso Denegado", "No tiene permisos para acceder al módulo de inventario")
+            return
         self.limpiar_contenido()
         self.create_inventario_widgets()
         
     def mostrar_caja(self):
+        # Verificar permisos
+        if self.usuario_actual['rol'] not in ['superadmin', 'gerente', 'cajero', 'desarrollador']:
+            messagebox.showerror("Acceso Denegado", "No tiene permisos para acceder al módulo de caja")
+            return
         self.limpiar_contenido()
         self.create_caja_widgets()
         
     def mostrar_devoluciones(self):
+        # Verificar permisos
+        if self.usuario_actual['rol'] not in ['superadmin', 'gerente', 'desarrollador']:
+            messagebox.showerror("Acceso Denegado", "No tiene permisos para acceder al módulo de devoluciones")
+            return
         self.limpiar_contenido()
         self.create_devoluciones_widgets()
         
     def mostrar_reportes(self):
+        # Verificar permisos
+        if self.usuario_actual['rol'] not in ['superadmin', 'gerente', 'desarrollador']:
+            messagebox.showerror("Acceso Denegado", "No tiene permisos para acceder al módulo de reportes")
+            return
         self.limpiar_contenido()
         self.create_reportes_widgets()
         
     def mostrar_microservicios(self):
+        # Verificar permisos
+        if self.usuario_actual['rol'] not in ['superadmin', 'gerente', 'desarrollador']:
+            messagebox.showerror("Acceso Denegado", "No tiene permisos para acceder al módulo de microservicios")
+            return
         self.limpiar_contenido()
         self.create_microservicios_widgets()
         
